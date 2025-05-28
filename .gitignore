@@ -172,3 +172,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Custom configuration files
+api_keys.yaml
+*.pyc
+.DS_Store
+postgres_data/
+db.sqlite3
+pytest.ini 
