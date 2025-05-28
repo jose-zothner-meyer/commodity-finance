@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Commodity Finance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/boxicons@2.0.7/css/boxicons.min.css" rel="stylesheet">
+    <style>
+        .source-badge {
+            font-size: 0.8em;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+        }
+        .nav-tabs .nav-link.active {
+            font-weight: 600;
+        }
+        .data-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .source-info {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 8px;
+        }
+        .controls-row {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .chart-container {
+            min-height: 400px;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        body.dark-mode {
+            background-color: #181a1b !important;
+            color: #e0e0e0 !important;
+        }
+        .dark-mode .card,
+        .dark-mode .navbar,
+        .dark-mode .form-control,
+        .dark-mode .form-select {
+            background-color: #23272b !important;
+            color: #e0e0e0 !important;
+            border-color: #444 !important;
+        }
+        .dark-mode .chart-container {
+            background: #23272b !important;
+        }
+        .dark-mode .nav-tabs .nav-link {
+            color: #e0e0e0 !important;
+        }
+        .dark-mode .nav-tabs .nav-link.active {
+            color: #fff !important;
+            background-color: #23272b !important;
+        }
+        .dark-mode .controls-row {
+            background: #23272b !important;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class='bx bx-line-chart'></i> Energy Finance Dashboard
+            </a>
+            <div class="form-check form-switch ms-3">
+                <input class="form-check-input" type="checkbox" id="darkModeSwitch">
+                <label class="form-check-label text-light" for="darkModeSwitch">Dark Mode</label>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="commodities-tab" data-bs-toggle="tab" href="#commodities" role="tab">
+                    <i class='bx bx-package'></i> Commodities
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="weather-tab" data-bs-toggle="tab" href="#weather" role="tab">
+                    <i class='bx bx-cloud'></i> Weather
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="energy-tab" data-bs-toggle="tab" href="#energy" role="tab">
+                    <i class='bx bx-bulb'></i> Energy Prices
+                </a>
+            </li>
+        </ul>
+
+        <div class="tab-content mt-3" id="dashboardTabsContent">
+            <!-- Commodities Tab -->
+            <div class="tab-pane fade show active" id="commodities" role="tabpanel">
+                <div class="controls-row">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Data Source</label>
+                            <select class="form-select" id="data-source">
+                                <option value="fmp">Financial Modeling Prep</option>
+                                <option value="commodity_price_api">CommodityPriceAPI</option>
+                                <option value="api_ninjas">API Ninjas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Asset</label>
+                            <select class="form-select" id="asset-select">
+                                <option value="" disabled selected>Select a commodity</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Technical Oscillator</label>
+                            <select class="form-select" id="oscillator-select">
+                                <option value="none">None</option>
+                                <option value="rsi">RSI</option>
+                                <option value="macd">MACD</option>
+                                <option value="stochastic">Stochastic</option>
+                                <option value="cci">CCI</option>
+                                <option value="williamsr">Williams %R</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Time Range</label>
+                            <select class="form-select" id="commodity-time-range">
+                                <option value="1d">1 Day</option>
+                                <option value="1w">1 Week</option>
+                                <option value="1m">1 Month</option>
+                                <option value="3m">3 Months</option>
+                                <option value="1y">1 Year</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card data-card">
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <div id="commodity-chart"></div>
+                                </div>
+                                <div class="chart-container" style="margin-top: 30px;">
+                                    <div id="oscillator-chart"></div>
+                                </div>
+                                <div class="source-info">
+                                    <i class='bx bx-link'></i> Data Sources: Alpha Vantage, API Ninjas, Financial Modeling Prep
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weather Tab -->
+            <div class="tab-pane fade" id="weather" role="tabpanel" aria-labelledby="weather-tab">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="input-group mb-2">
+                            <input type="text" class="form-control" id="citySearch" placeholder="Enter city name">
+                            <button class="btn btn-primary" onclick="createWeatherChart()">Search</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div id="weatherChart"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div id="weatherMetricsChart"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Energy Prices Tab -->
+            <div class="tab-pane fade" id="energy" role="tabpanel">
+                <div class="controls-row">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Market Area</label>
+                            <select class="form-select" id="energy-market">
+                                <option value="DE-LU">Germany-Luxembourg</option>
+                                <option value="FR">France</option>
+                                <option value="ES">Spain</option>
+                                <option value="IT">Italy</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Time Range</label>
+                            <select class="form-select" id="energy-time-range">
+                                <option value="1d">1 Day</option>
+                                <option value="1w">1 Week</option>
+                                <option value="1m">1 Month</option>
+                                <option value="3m">3 Months</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card data-card">
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <div id="energy-chart"></div>
+                                </div>
+                                <div class="source-info">
+                                    <i class='bx bx-link'></i> Source: ENTSO-E Transparency Platform
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html> 
