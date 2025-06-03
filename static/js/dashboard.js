@@ -99,7 +99,8 @@ function getTimeRangeDates(range) {
     
     return {
         start: start.toISOString().split('T')[0],
-        end: end.toISOString().split('T')[0]
+        end: end.toISOString().split('T')[0],
+        interval: range
     };
 }
 
@@ -151,6 +152,7 @@ async function createAssetChart() {
     const asset = document.getElementById('asset-select').value;
     const dataSource = document.getElementById('data-source').value;
     const timeRange = document.getElementById('commodity-time-range').value;
+    console.log(timeRange);
     const oscillator = document.getElementById('oscillator-select').value;
     
     if (!asset || !dataSource) return;

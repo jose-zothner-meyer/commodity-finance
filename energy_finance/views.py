@@ -85,14 +85,15 @@ def get_commodities(request):
         start = request.GET.get('start')
         end = request.GET.get('end')
         period = request.GET.get('period', '1d')
-        valid_sources = ['api_ninjas', 'fmp', 'commodity_price_api']
+        interval = request.GET.get('interval', '1d')
+        valid_sources = ['api_ninjas', 'fmp', 'commodity_price_api', 'alpha_vantage']
         params = dict(request.GET)
 
         if not source or source not in valid_sources:
             return error_response(endpoint, "validation", f"Invalid or missing data source: '{source}'", params=params, details=f"Supported sources: {valid_sources}", status=400)
         if not commodity:
             return error_response(endpoint, "validation", f"Invalid or missing commodity for selected source: '{commodity}'", params=params, details=f"Supported commodities for {source}: {valid_commodities.get(source, [])}", status=400)
-        if (source == 'commodity_price_api' or source == 'api_ninjas' or source == 'fmp') and (not start or not end):
+        if not start or not end:
             return error_response(endpoint, "validation", "Start and end dates are required.", params=params, details=f"Received start='{start}', end='{end}'", status=400)
         try:
             if start:
@@ -194,7 +195,16 @@ def get_commodities(request):
                     return error_response(endpoint, "vendor", "Failed to fetch data from vendor.", params=params, details=str(e), exc=e, status=502)
                 except Exception as e:
                     return error_response(endpoint, "internal", "Unexpected error occurred during data fetch.", params=params, details=str(e), exc=e, status=500)
+            elif source == 'alpha_vantage':
+                try:
+                    client = AlphaVantageAPIClient()
+                except ValueError as e:
+                    return error_response(endpoint, "config", str(e), params=params, status=500)
+                data = client.get_historical(commodity, start, end, interval)
+                return JsonResponse(data)
 
+            else:
+                raise ValueError(f"Invalid source: {source}")
         except requests.exceptions.RequestException as e:
             return error_response(endpoint, "vendor", "Failed to fetch data from vendor.", params=params, details=str(e), exc=e, status=502)
         except Exception as e:
@@ -352,7 +362,7 @@ def get_available_symbols_by_data_source(request):
     cache_key = f'{source}_commodity_symbols'
     cached_symbols = cache.get(cache_key)
     
-    if cached_symbols is not None:
+    if cached_symbols is not None or []:
         return JsonResponse(cached_symbols, safe=False)
     
     # If not in cache, fetch from API

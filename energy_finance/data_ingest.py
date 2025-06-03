@@ -188,3 +188,29 @@ class AlphaVantageAPIClient(APIClient):
             'WTI', 'BRENT', 'NATURAL_GAS', 'COPPER', 'ALUMINUM',
             'WHEAT', 'CORN', 'COTTON', 'SUGAR', 'COFFEE'
         ] 
+        
+    def get_historical(self, commodity: str, start: str, end: str, interval: str = "1d") -> Dict[str, Any]:
+        """
+        Fetch historical commodity data from Alpha Vantage.
+        
+        Args:
+            commodity (str): The commodity symbol (e.g., 'WTI', 'BRENT', 'NATURAL_GAS')
+            start (str): Start date in YYYY-MM-DD format
+            end (str): End date in YYYY-MM-DD format
+            period (str): Time period (1d, 1w, 1mo)
+        """
+        base = "https://www.alphavantage.co/query?function={commodity}&interval={interval}&apikey=demo"
+        intervalMapping = {"1d": "daily", "1w": "weekly", "1mo": "monthly", "3m": "quarterly", "1y": "annual"}
+        url = base.format(commodity=commodity, interval=intervalMapping[interval])
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            return {"dates": [], "values": []}
+        data = data["data"]
+        dates = []
+        values = []
+        for obj in data:
+            dates.append(obj["date"])
+            values.append(obj["value"])
+        return {"dates": dates, "values": values}
