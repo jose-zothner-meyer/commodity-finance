@@ -1,0 +1,53 @@
+[
+  {
+    "source": "fmp",
+    "symbol": "GCUSD",
+    "data_points": 43,
+    "price_range": "$2004.30 - $2073.40",
+    "oscillators": {
+      "kama": {
+        "total_values": 43,
+        "meaningful_values": 34,
+        "success": true
+      },
+      "price_osc": {
+        "total_values": 43,
+        "meaningful_values": 18,
+        "success": true
+      },
+      "momentum": {
+        "total_values": 43,
+        "meaningful_values": 33,
+        "success": true
+      },
+      "roc": {
+        "total_values": 43,
+        "meaningful_values": 31,
+        "success": true
+      },
+      "efficiency_ratio": {
+        "total_values": 43,
+        "meaningful_values": 33,
+        "success": true
+      }
+    }
+  },
+  {
+    "source": "fmp",
+    "symbol": "SIUSD",
+    "data_points": 43,
+    "price_range": "$22.15 - $23.95",
+    "oscillators": {
+      "cci_enhanced": {
+        "total_values": 43,
+        "meaningful_values": 24,
+        "success": true
+      },
+      "smi": {
+        "total_values": 43,
+        "meaningful_values": 28,
+        "success": true
+      }
+    }
+  }
+]

@@ -24,12 +24,16 @@ from .data_ingest import (
     OpenWeatherAPIClient,
     AlphaVantageAPIClient
 )
+# Import custom Kaufman oscillators
 from .oscillators import (
-    calculate_rsi,
-    calculate_macd,
-    calculate_stochastic,
-    calculate_cci,
-    calculate_williams_r
+    calculate_kaufman_adaptive_moving_average,
+    calculate_price_oscillator,
+    calculate_commodity_channel_index_enhanced,
+    calculate_momentum_oscillator,
+    calculate_rate_of_change_oscillator,
+    calculate_stochastic_momentum_index,
+    calculate_accumulation_distribution_oscillator,
+    calculate_kaufman_efficiency_ratio
 )
 from django.core.cache import cache
 from django.shortcuts import render
@@ -129,6 +133,40 @@ def get_commodities(request):
                 for entry in data:
                     results["dates"].append(datetime.fromtimestamp(entry["time"], timezone.utc).strftime('%Y-%m-%d'))
                     results["prices"].append(entry["close"])
+                
+                # Calculate Kaufman oscillators if requested for API Ninjas data
+                if oscillator != 'none' and len(results["prices"]) > 0:
+                    osc_values = []
+                    osc_dates = results["dates"]
+                    
+                    if oscillator == 'kama':
+                        osc_values = calculate_kaufman_adaptive_moving_average(results["prices"])
+                    elif oscillator == 'price_osc':
+                        osc_values = calculate_price_oscillator(results["prices"])
+                    elif oscillator == 'cci_enhanced':
+                        # For enhanced CCI, we need high and low prices from API Ninjas data
+                        high_prices = [float(entry.get("high", entry["close"])) for entry in data]
+                        low_prices = [float(entry.get("low", entry["close"])) for entry in data]
+                        osc_values = calculate_commodity_channel_index_enhanced(high_prices, low_prices, results["prices"])
+                    elif oscillator == 'momentum':
+                        osc_values = calculate_momentum_oscillator(results["prices"])
+                    elif oscillator == 'roc':
+                        osc_values = calculate_rate_of_change_oscillator(results["prices"])
+                    elif oscillator == 'smi':
+                        high_prices = [float(entry.get("high", entry["close"])) for entry in data]
+                        low_prices = [float(entry.get("low", entry["close"])) for entry in data]
+                        smi_k, smi_d = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                        osc_values = smi_k  # Return %K line
+                    elif oscillator == 'efficiency_ratio':
+                        osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                    
+                    # Add oscillator data to results
+                    if osc_values:
+                        results["oscillator"] = {
+                            "values": osc_values,
+                            "dates": osc_dates,
+                            "name": oscillator.upper()
+                        }
 
             elif source == 'fmp':
                 try:
@@ -147,6 +185,40 @@ def get_commodities(request):
                 for entry in data.get("historical", []):
                     results["dates"].append(entry["date"])
                     results["prices"].append(entry["close"])
+                
+                # Calculate Kaufman oscillators if requested for FMP data
+                if oscillator != 'none' and len(results["prices"]) > 0:
+                    osc_values = []
+                    osc_dates = results["dates"]
+                    
+                    if oscillator == 'kama':
+                        osc_values = calculate_kaufman_adaptive_moving_average(results["prices"])
+                    elif oscillator == 'price_osc':
+                        osc_values = calculate_price_oscillator(results["prices"])
+                    elif oscillator == 'cci_enhanced':
+                        # For enhanced CCI, we need high and low prices from FMP data
+                        high_prices = [float(entry.get("high", entry["close"])) for entry in data.get("historical", [])]
+                        low_prices = [float(entry.get("low", entry["close"])) for entry in data.get("historical", [])]
+                        osc_values = calculate_commodity_channel_index_enhanced(high_prices, low_prices, results["prices"])
+                    elif oscillator == 'momentum':
+                        osc_values = calculate_momentum_oscillator(results["prices"])
+                    elif oscillator == 'roc':
+                        osc_values = calculate_rate_of_change_oscillator(results["prices"])
+                    elif oscillator == 'smi':
+                        high_prices = [float(entry.get("high", entry["close"])) for entry in data.get("historical", [])]
+                        low_prices = [float(entry.get("low", entry["close"])) for entry in data.get("historical", [])]
+                        smi_k, smi_d = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                        osc_values = smi_k  # Return %K line
+                    elif oscillator == 'efficiency_ratio':
+                        osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                    
+                    # Add oscillator data to results
+                    if osc_values:
+                        results["oscillator"] = {
+                            "values": osc_values,
+                            "dates": osc_dates,
+                            "name": oscillator.upper()
+                        }
 
             elif source == 'commodity_price_api':
                 try:
@@ -168,27 +240,39 @@ def get_commodities(request):
                         results["dates"].append(entry["date"])
                         results["prices"].append(float(entry["price"]))
                     
-                    # Calculate oscillator if requested
+                    # Calculate Kaufman oscillators if requested
                     if oscillator != 'none' and len(results["prices"]) > 0:
                         osc_values = []
-                        if oscillator == 'rsi':
-                            osc_values = calculate_rsi(results["prices"])
-                        elif oscillator == 'macd':
-                            macd, signal, hist = calculate_macd(results["prices"])
-                            osc_values = macd  # You might want to return all three series
-                        elif oscillator == 'stochastic':
-                            # For stochastic, we need high and low prices
+                        osc_dates = results["dates"]
+                        
+                        if oscillator == 'kama':
+                            osc_values = calculate_kaufman_adaptive_moving_average(results["prices"])
+                        elif oscillator == 'price_osc':
+                            osc_values = calculate_price_oscillator(results["prices"])
+                        elif oscillator == 'cci_enhanced':
+                            # For enhanced CCI, we need high and low prices
                             high_prices = [float(entry.get("high", entry["price"])) for entry in data['data']]
                             low_prices = [float(entry.get("low", entry["price"])) for entry in data['data']]
-                            osc_values = calculate_stochastic(results["prices"], high_prices, low_prices)
-                        elif oscillator == 'cci':
+                            osc_values = calculate_commodity_channel_index_enhanced(high_prices, low_prices, results["prices"])
+                        elif oscillator == 'momentum':
+                            osc_values = calculate_momentum_oscillator(results["prices"])
+                        elif oscillator == 'roc':
+                            osc_values = calculate_rate_of_change_oscillator(results["prices"])
+                        elif oscillator == 'smi':
                             high_prices = [float(entry.get("high", entry["price"])) for entry in data['data']]
                             low_prices = [float(entry.get("low", entry["price"])) for entry in data['data']]
-                            osc_values = calculate_cci(results["prices"], high_prices, low_prices)
-                        elif oscillator == 'williamsr':
-                            high_prices = [float(entry.get("high", entry["price"])) for entry in data['data']]
-                            low_prices = [float(entry.get("low", entry["price"])) for entry in data['data']]
-                            osc_values = calculate_williams_r(results["prices"], high_prices, low_prices)
+                            smi_k, smi_d = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                            osc_values = smi_k  # Return %K line
+                        elif oscillator == 'efficiency_ratio':
+                            osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                        
+                        # Add oscillator data to results
+                        if osc_values:
+                            results["oscillator"] = {
+                                "values": osc_values,
+                                "dates": osc_dates,
+                                "name": oscillator.upper()
+                            }
                     
                     return JsonResponse(results)
                 except requests.exceptions.RequestException as e:

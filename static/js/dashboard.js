@@ -247,37 +247,45 @@ async function createAssetChart() {
 
 function getOscillatorColor(oscillator) {
     const colors = {
-        rsi: '#FF6B6B',
-        macd: '#4ECDC4',
-        stochastic: '#45B7D1',
-        cci: '#96CEB4',
-        williamsr: '#FFEEAD'
+        kama: '#FF6B6B',
+        price_osc: '#4ECDC4',
+        cci_enhanced: '#45B7D1',
+        momentum: '#96CEB4',
+        roc: '#FFEEAD',
+        smi: '#DDA0DD',
+        efficiency_ratio: '#98FB98'
     };
     return colors[oscillator] || '#FF6B6B';
 }
 
 function getOscillatorYAxisConfig(oscillator) {
     const configs = {
-        rsi: {
-            range: [0, 100],
-            tick0: 0,
-            dtick: 20
+        kama: {
+            tickprefix: '$'
         },
-        macd: {
+        price_osc: {
+            tickprefix: '%',
+            ticksuffix: ''
+        },
+        cci_enhanced: {
             tickprefix: ''
         },
-        stochastic: {
-            range: [0, 100],
-            tick0: 0,
-            dtick: 20
+        momentum: {
+            tickprefix: '$'
         },
-        cci: {
-            tickprefix: ''
+        roc: {
+            tickprefix: '%',
+            ticksuffix: ''
         },
-        williamsr: {
-            range: [-100, 0],
+        smi: {
+            range: [-100, 100],
             tick0: -100,
-            dtick: 20
+            dtick: 50
+        },
+        efficiency_ratio: {
+            range: [0, 1],
+            tick0: 0,
+            dtick: 0.2
         }
     };
     return configs[oscillator] || {};
