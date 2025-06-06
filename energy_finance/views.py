@@ -1,6 +1,5 @@
 import time
 from django.http import JsonResponse
-from django.db.models import Q
 from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta, timezone
 import json
@@ -11,12 +10,9 @@ import yaml
 import os
 import xml.etree.ElementTree as ET
 import traceback
-import sys
-import numpy as np
-from typing import List, Dict, Any, Tuple
 
 from energy_finance.constants import SUPPORTED_NAMES, DataSource
-from .data_ingest import (
+from energy_finance.data_ingest import (
     PowerPriceAPIClient,
     APINinjasCommodityClient,
     FMPCommoditiesClient,
@@ -24,8 +20,9 @@ from .data_ingest import (
     OpenWeatherAPIClient,
     AlphaVantageAPIClient
 )
-# Import custom Kaufman oscillators
-from .oscillators import (
+# Import custom Kaufman oscillators and Ehlers digital signal processing oscillators
+from energy_finance.oscillators import (
+    # Kaufman oscillators
     calculate_kaufman_adaptive_moving_average,
     calculate_price_oscillator,
     calculate_commodity_channel_index_enhanced,
@@ -33,7 +30,15 @@ from .oscillators import (
     calculate_rate_of_change_oscillator,
     calculate_stochastic_momentum_index,
     calculate_accumulation_distribution_oscillator,
-    calculate_kaufman_efficiency_ratio
+    calculate_kaufman_efficiency_ratio,
+    # Ehlers oscillators
+    calculate_ehlers_fisher_transform,
+    calculate_ehlers_stochastic_cg,
+    calculate_ehlers_super_smoother,
+    calculate_ehlers_cycle_period,
+    calculate_ehlers_mama,
+    calculate_ehlers_sinewave_indicator,
+    calculate_ehlers_hilbert_transform
 )
 from django.core.cache import cache
 from django.shortcuts import render
@@ -54,8 +59,8 @@ def parse_date(date_str):
     """Parse date string to datetime object"""
     try:
         return datetime.strptime(date_str, '%Y-%m-%d')
-    except ValueError:
-        raise ValueError("Invalid date format. Please use YYYY-MM-DD.")
+    except ValueError as exc:
+        raise ValueError("Invalid date format. Please use YYYY-MM-DD.") from exc
 
 def error_response(endpoint, error_type, message, params=None, details=None, exc=None, status=500):
     """Helper function to create error responses"""
@@ -79,9 +84,9 @@ def get_commodities(request):
     try:
         try:
             commodities_file_path = os.path.join(os.path.dirname(__file__), '..', 'commodities_by_source.json')
-            with open(commodities_file_path) as f:
+            with open(commodities_file_path, encoding='utf-8') as f:
                 valid_commodities = json.load(f) if commodities_file_path.endswith('.json') else yaml.safe_load(f)
-        except Exception as e:
+        except FileNotFoundError:
             valid_commodities = {}
 
         source = request.GET.get('source')
@@ -109,10 +114,10 @@ def get_commodities(request):
                 end_date = datetime.strptime(end, '%Y-%m-%d')
                 if start_date > end_date:
                     return error_response(endpoint, "validation", "Start date must be before end date.", params=params, details=f"start='{start}', end='{end}'", status=400)
-        except Exception as e:
+        except ValueError as e:
             return error_response(endpoint, "validation", "Invalid date format for start or end. Use YYYY-MM-DD.", params=params, details=f"Received start='{start}', end='{end}'. Error: {e}", status=400)
 
-        results = {"dates": [], "prices": []}
+        results: dict = {"dates": [], "prices": []}
         oscillator = request.GET.get('oscillator', 'none')
 
         try:
@@ -121,9 +126,9 @@ def get_commodities(request):
                     client = APINinjasCommodityClient()
                 except ValueError as e:
                     return error_response(endpoint, "config", str(e), params=params, status=500)
-                url = f"https://api.api-ninjas.com/v1/commoditypricehistorical"
+                url = "https://api.api-ninjas.com/v1/commoditypricehistorical"
                 params_api = {"name": commodity, "period": period, "start": start, "end": end}
-                r = requests.get(url, params=params_api, headers=client.headers)
+                r = requests.get(url, params=params_api, headers=client.headers, timeout=30)
                 if r.status_code == 400:
                     return error_response(endpoint, "vendor", "Invalid request to API Ninjas.", params=params, details=r.text, status=400)
                 if r.status_code == 401:
@@ -155,10 +160,29 @@ def get_commodities(request):
                     elif oscillator == 'smi':
                         high_prices = [float(entry.get("high", entry["close"])) for entry in data]
                         low_prices = [float(entry.get("low", entry["close"])) for entry in data]
-                        smi_k, smi_d = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                        smi_k, _ = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
                         osc_values = smi_k  # Return %K line
                     elif oscillator == 'efficiency_ratio':
                         osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                    # Ehlers Digital Signal Processing Oscillators
+                    elif oscillator == 'fisher_transform':
+                        osc_values = calculate_ehlers_fisher_transform(results["prices"])
+                    elif oscillator == 'stochastic_cg':
+                        high_prices = [float(entry.get("high", entry["close"])) for entry in data]
+                        low_prices = [float(entry.get("low", entry["close"])) for entry in data]
+                        osc_values = calculate_ehlers_stochastic_cg(high_prices, low_prices, results["prices"])
+                    elif oscillator == 'super_smoother':
+                        osc_values = calculate_ehlers_super_smoother(results["prices"])
+                    elif oscillator == 'cycle_period':
+                        osc_values = calculate_ehlers_cycle_period(results["prices"])
+                    elif oscillator == 'mama':
+                        mama_values, _ = calculate_ehlers_mama(results["prices"])
+                        osc_values = mama_values  # Return MAMA line
+                    elif oscillator == 'sinewave':
+                        sine_values, _ = calculate_ehlers_sinewave_indicator(results["prices"])
+                        osc_values = sine_values  # Return Sine wave
+                    elif oscillator == 'hilbert_transform':
+                        osc_values = calculate_ehlers_hilbert_transform(results["prices"])
                     
                     # Add oscillator data to results
                     if osc_values:
@@ -207,10 +231,29 @@ def get_commodities(request):
                     elif oscillator == 'smi':
                         high_prices = [float(entry.get("high", entry["close"])) for entry in data.get("historical", [])]
                         low_prices = [float(entry.get("low", entry["close"])) for entry in data.get("historical", [])]
-                        smi_k, smi_d = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                        smi_k, _ = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
                         osc_values = smi_k  # Return %K line
                     elif oscillator == 'efficiency_ratio':
                         osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                    # Ehlers Digital Signal Processing Oscillators
+                    elif oscillator == 'fisher_transform':
+                        osc_values = calculate_ehlers_fisher_transform(results["prices"])
+                    elif oscillator == 'stochastic_cg':
+                        high_prices = [float(entry.get("high", entry["close"])) for entry in data.get("historical", [])]
+                        low_prices = [float(entry.get("low", entry["close"])) for entry in data.get("historical", [])]
+                        osc_values = calculate_ehlers_stochastic_cg(high_prices, low_prices, results["prices"])
+                    elif oscillator == 'super_smoother':
+                        osc_values = calculate_ehlers_super_smoother(results["prices"])
+                    elif oscillator == 'cycle_period':
+                        osc_values = calculate_ehlers_cycle_period(results["prices"])
+                    elif oscillator == 'mama':
+                        mama_values, _ = calculate_ehlers_mama(results["prices"])
+                        osc_values = mama_values  # Return MAMA line
+                    elif oscillator == 'sinewave':
+                        sine_values, _ = calculate_ehlers_sinewave_indicator(results["prices"])
+                        osc_values = sine_values  # Return Sine wave
+                    elif oscillator == 'hilbert_transform':
+                        osc_values = calculate_ehlers_hilbert_transform(results["prices"])
                     
                     # Add oscillator data to results
                     if osc_values:
@@ -231,7 +274,7 @@ def get_commodities(request):
                     if not data or 'data' not in data:
                         return error_response(endpoint, "vendor", 'No price data available for the specified date range', params=params, status=404)
                     
-                    results = {
+                    results: dict = {
                         "dates": [],
                         "prices": []
                     }
@@ -261,10 +304,29 @@ def get_commodities(request):
                         elif oscillator == 'smi':
                             high_prices = [float(entry.get("high", entry["price"])) for entry in data['data']]
                             low_prices = [float(entry.get("low", entry["price"])) for entry in data['data']]
-                            smi_k, smi_d = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                            smi_k, _ = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
                             osc_values = smi_k  # Return %K line
                         elif oscillator == 'efficiency_ratio':
                             osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                        # Ehlers Digital Signal Processing Oscillators
+                        elif oscillator == 'fisher_transform':
+                            osc_values = calculate_ehlers_fisher_transform(results["prices"])
+                        elif oscillator == 'stochastic_cg':
+                            high_prices = [float(entry.get("high", entry["price"])) for entry in data['data']]
+                            low_prices = [float(entry.get("low", entry["price"])) for entry in data['data']]
+                            osc_values = calculate_ehlers_stochastic_cg(high_prices, low_prices, results["prices"])
+                        elif oscillator == 'super_smoother':
+                            osc_values = calculate_ehlers_super_smoother(results["prices"])
+                        elif oscillator == 'cycle_period':
+                            osc_values = calculate_ehlers_cycle_period(results["prices"])
+                        elif oscillator == 'mama':
+                            mama_values, _ = calculate_ehlers_mama(results["prices"])
+                            osc_values = mama_values  # Return MAMA line
+                        elif oscillator == 'sinewave':
+                            sine_values, _ = calculate_ehlers_sinewave_indicator(results["prices"])
+                            osc_values = sine_values  # Return Sine wave
+                        elif oscillator == 'hilbert_transform':
+                            osc_values = calculate_ehlers_hilbert_transform(results["prices"])
                         
                         # Add oscillator data to results
                         if osc_values:
@@ -317,7 +379,7 @@ def get_weather(request):
         try:
             response = client.get_current(lat, lon)
         except Exception as e:
-            logger.error(f"Error fetching current weather data for {city}: {str(e)}")
+            logger.error("Error fetching current weather data for %s: %s", city, str(e))
             return JsonResponse({'error': f'Error fetching current weather data: {str(e)}'}, status=500)
         # Process the data
         processed_data = [{
@@ -334,7 +396,7 @@ def get_weather(request):
             'data': processed_data
         })
     except Exception as e:
-        logger.error(f"Error in get_weather: {str(e)}")
+        logger.error("Error in get_weather: %s", str(e))
         return JsonResponse({'error': str(e)}, status=500)
 
 @require_http_methods(["GET"])
@@ -387,7 +449,7 @@ def get_energy(request):
             params['contract_MarketAgreement.type'] = contract_type
         if offset:
             params['offset'] = offset
-        r = requests.get(url, params=params, headers=client.headers)
+        r = requests.get(url, params=params, headers=client.headers, timeout=30)
         if r.status_code == 401 or r.status_code == 403:
             return error_response("get_energy", "vendor", "Unauthorized or forbidden. Check your ENTSO-E API token and permissions.", params=dict(request.GET), details=r.text, status=401)
         elif r.status_code == 400:
@@ -405,14 +467,26 @@ def get_energy(request):
             prices = []
             for ts in timeseries:
                 for period in ts.findall('.//ns:Period', ns):
-                    start = period.find('ns:timeInterval/ns:start', ns).text
+                    start_element = period.find('ns:timeInterval/ns:start', ns)
+                    if start_element is None or start_element.text is None:
+                        continue
+                    start = start_element.text
                     points = period.findall('ns:Point', ns)
                     for point in points:
-                        price = point.find('ns:price.amount', ns).text
-                        position = int(point.find('ns:position', ns).text)
-                        dt = datetime.strptime(start, '%Y-%m-%dT%H:%MZ') + timedelta(hours=position-1)
-                        dates.append(dt.strftime('%Y-%m-%dT%H:%MZ'))
-                        prices.append(float(price))
+                        price_element = point.find('ns:price.amount', ns)
+                        position_element = point.find('ns:position', ns)
+                        if price_element is None or position_element is None:
+                            continue
+                        if price_element.text is None or position_element.text is None:
+                            continue
+                        try:
+                            price = float(price_element.text)
+                            position = int(position_element.text)
+                            dt = datetime.strptime(start, '%Y-%m-%dT%H:%MZ') + timedelta(hours=position-1)
+                            dates.append(dt.strftime('%Y-%m-%dT%H:%MZ'))
+                            prices.append(price)
+                        except (ValueError, TypeError):
+                            continue
             if not dates or not prices:
                 return error_response("get_energy", "vendor", "No price data available for the selected period.", params=dict(request.GET), details="The parsed data contains no valid price points.", status=404)
             return JsonResponse({"dates": dates, "prices": prices})
@@ -427,12 +501,10 @@ def get_energy(request):
 @require_http_methods(["GET"])
 def get_commodities_list(request):
     source = request.GET.get('source', 'api_ninjas')
-    import os
-    import json as pyjson
     json_path = os.path.join(os.path.dirname(__file__), '..', 'commodities_by_source.json')
     print(f"DEBUG: commodities_by_source.json path: {json_path}")
-    with open(json_path) as f:
-        data = pyjson.load(f)
+    with open(json_path, encoding='utf-8') as f:
+        data = json.load(f)
     print(f"DEBUG: loaded commodities_by_source.json: {data}")
     print(f"DEBUG: requested source: {source}")
     return JsonResponse({"commodities": data.get(source, [])})
@@ -450,95 +522,97 @@ def get_available_symbols_by_data_source(request):
         return JsonResponse(cached_symbols, safe=False)
     
     # If not in cache, fetch from API
-    with open('api_keys.yaml', 'r') as f:
+    with open('api_keys.yaml', 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
         api_key_fmp = config['FIN_MODELING_PREP_KEY']
         api_key_cpa = config['COMMODITYPRICEAPI_KEY']
         api_key = config['API_NINJAS_KEY']
         
-    match source:
-        case DataSource.FMP.value:
-            base_url = 'https://financialmodelingprep.com/api/v3'
-            endpoint = f'{base_url}/symbol/available-commodities'
+    if source == DataSource.FMP.value:
+        base_url = 'https://financialmodelingprep.com/api/v3'
+        endpoint = f'{base_url}/symbol/available-commodities'
+        
+        try:
+            response = requests.get(
+                endpoint,
+                params={'apikey': api_key_fmp},
+                timeout=30
+            )
+            response.raise_for_status()
+            symbols = response.json()
             
+            # Cache the results for 24 hours (86400 seconds)
+            cache.set(cache_key, symbols, timeout=86400)
+            
+            return JsonResponse(symbols, safe=False)
+        except requests.exceptions.RequestException as e:
+            logger.error("Error fetching FMP symbols: %s", e)
+            return JsonResponse({"error": "Failed to fetch symbols"}, status=500)
+        except json.JSONDecodeError as e:
+            logger.error("Error parsing FMP symbols response: %s", e)
+            return JsonResponse({"error": "Invalid response from API"}, status=500)
+
+    elif source == DataSource.COMMODITYPRICEAPI.value:
+        endpoint = 'https://api.commoditypriceapi.com/v2/symbols'
+        try:
+            response = requests.get(
+                endpoint,
+                headers={'x-api-key': api_key_cpa},
+                timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            if isinstance(data, dict):
+                if "symbols" in data:
+                    cache.set(cache_key, data["symbols"], timeout=86400)
+                    return JsonResponse(data["symbols"], safe=False)
+                elif "data" in data:
+                    return JsonResponse(data["data"], safe=False)
+            elif isinstance(data, list):
+                return JsonResponse([{"symbol": s, "name": s} for s in data], safe=False)
+            return JsonResponse([], safe=False)
+        except requests.exceptions.RequestException as e:
+            logger.error("Error fetching CommodityPriceAPI symbols: %s", e)
+            return JsonResponse([], safe=False)
+
+    elif source == DataSource.API_NINJAS.value:
+        data = []
+        base_url = 'https://api.api-ninjas.com/v1/commodityprice'
+        for name in SUPPORTED_NAMES:
             try:
                 response = requests.get(
-                    endpoint,
-                    params={'apikey': api_key_fmp}
+                    base_url,
+                    headers={'X-Api-Key': api_key},
+                    params={'name': name},
+                    timeout=30
                 )
-                response.raise_for_status()
-                symbols = response.json()
-                
-                # Cache the results for 24 hours (86400 seconds)
-                cache.set(cache_key, symbols, timeout=86400)
-                
-                return JsonResponse(symbols, safe=False)
+                if response.status_code == 200:
+                    res = response.json()
+                    data.append(res)
+                else:
+                    logger.error("Error for %s: %s %s", name, response.status_code, response.text)
+                time.sleep(0.2)  # Be polite to the API
             except requests.exceptions.RequestException as e:
-                logger.error(f"Error fetching FMP symbols: {e}")
-                return JsonResponse({"error": "Failed to fetch symbols"}, status=500)
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parsing FMP symbols response: {e}")
-                return JsonResponse({"error": "Invalid response from API"}, status=500)
+                logger.error("Error fetching API Ninjas data for %s: %s", name, e)
+                return JsonResponse({"error": str(e)}, status=400)
+        cache.set(cache_key, data, timeout=86400)
+        return JsonResponse(data, safe=False)
 
-        case DataSource.COMMODITYPRICEAPI.value:
-            endpoint = 'https://api.commoditypriceapi.com/v2/symbols'
-            try:
-                response = requests.get(
-                    endpoint,
-                    headers={'x-api-key': api_key_cpa}
-                )
-                response.raise_for_status()
-                data = response.json()
-                
-                if isinstance(data, dict):
-                    if "symbols" in data:
-                        cache.set(cache_key, data["symbols"], timeout=86400)
-                        return JsonResponse(data["symbols"], safe=False)
-                    elif "data" in data:
-                        return JsonResponse(data["data"], safe=False)
-                elif isinstance(data, list):
-                    return JsonResponse([{"symbol": s, "name": s} for s in data], safe=False)
-                return JsonResponse([], safe=False)
-            except Exception as e:
-                logger.error(f"Error fetching CommodityPriceAPI symbols: {e}")
-                return JsonResponse([], safe=False)
+    elif source == DataSource.ALPHA_VANTAGE.value:
+        try:
+            client = AlphaVantageAPIClient()
+            symbols = client.get_available_commodities()
+            # Format symbols to match other sources
+            formatted_symbols = [{"symbol": s, "name": s} for s in symbols]
+            cache.set(cache_key, formatted_symbols, timeout=86400)
+            return JsonResponse(formatted_symbols, safe=False)
+        except requests.exceptions.RequestException as e:
+            logger.error("Error fetching Alpha Vantage symbols: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
 
-        case DataSource.API_NINJAS.value:
-            data = []
-            base_url = 'https://api.api-ninjas.com/v1/commodityprice'
-            for name in SUPPORTED_NAMES:
-                try:
-                    response = requests.get(
-                        base_url,
-                        headers={'X-Api-Key': api_key},
-                        params={'name': name}
-                    )
-                    if response.status_code == 200:
-                        res = response.json()
-                        data.append(res)
-                    else:
-                        logger.error(f"Error for {name}: {response.status_code} {response.text}")
-                    time.sleep(0.2)  # Be polite to the API
-                except Exception as e:
-                    logger.error(f"Error fetching API Ninjas data for {name}: {e}")
-                    return JsonResponse({"error": str(e)}, status=400)
-            cache.set(cache_key, data, timeout=86400)
-            return JsonResponse(data, safe=False)
-
-        case DataSource.ALPHA_VANTAGE.value:
-            try:
-                client = AlphaVantageAPIClient()
-                symbols = client.get_available_commodities()
-                # Format symbols to match other sources
-                formatted_symbols = [{"symbol": s, "name": s} for s in symbols]
-                cache.set(cache_key, formatted_symbols, timeout=86400)
-                return JsonResponse(formatted_symbols, safe=False)
-            except Exception as e:
-                logger.error(f"Error fetching Alpha Vantage symbols: {e}")
-                return JsonResponse({"error": str(e)}, status=500)
-
-        case _:
-            return JsonResponse({"error": "Invalid source"}, status=400)
+    else:
+        return JsonResponse({"error": "Invalid source"}, status=400)
 
 def index(request):
     return render(request, 'energy_finance/index.html')
@@ -554,6 +628,6 @@ def get_commodity_data(request):
         client = AlphaVantageAPIClient()
         data = client.get_commodity_data(commodity)
         return JsonResponse(data)
-    except Exception as e:
-        logger.error(f"Error in get_commodity_data: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        logger.error("Error in get_commodity_data: %s", str(e))
         return JsonResponse({'error': str(e)}, status=500)  

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integration test for Kaufman oscillators with different data sources
+Integration test for Kaufman and Ehlers oscillators with different data sources
 Tests the complete pipeline from API call to oscillator calculation
 """
 
@@ -27,6 +27,20 @@ def test_oscillator_api(base_url="http://127.0.0.1:8000"):
             "start": "2024-01-01",
             "end": "2024-02-29",
             "oscillators": ["cci_enhanced", "smi"]
+        },
+        {
+            "source": "fmp",
+            "name": "CLUSD",  # Crude Oil
+            "start": "2024-01-01", 
+            "end": "2024-02-29",
+            "oscillators": ["fisher_transform", "stochastic_cg", "super_smoother", "cycle_period"]
+        },
+        {
+            "source": "fmp",
+            "name": "NGUSD",  # Natural Gas
+            "start": "2024-01-01",
+            "end": "2024-02-29", 
+            "oscillators": ["mama", "sinewave", "hilbert_transform"]
         }
     ]
     
@@ -113,7 +127,7 @@ def test_oscillator_api(base_url="http://127.0.0.1:8000"):
 def generate_report(results):
     """Generate a comprehensive test report"""
     print(f"\n{'='*80}")
-    print("KAUFMAN OSCILLATORS INTEGRATION TEST REPORT")
+    print("KAUFMAN & EHLERS OSCILLATORS INTEGRATION TEST REPORT")
     print(f"{'='*80}")
     print(f"Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -142,14 +156,14 @@ def generate_report(results):
     print(f"{'='*80}")
     
     if passed_tests == total_tests:
-        print("🎉 ALL TESTS PASSED! Kaufman oscillators are working correctly.")
+        print("🎉 ALL TESTS PASSED! Kaufman and Ehlers oscillators are working correctly.")
     else:
         print(f"⚠️  {total_tests - passed_tests} tests failed. Check the details above.")
     
     return passed_tests == total_tests
 
 if __name__ == "__main__":
-    print("🔍 Starting Kaufman Oscillators Integration Test...")
+    print("🔍 Starting Kaufman & Ehlers Oscillators Integration Test...")
     
     try:
         results = test_oscillator_api()

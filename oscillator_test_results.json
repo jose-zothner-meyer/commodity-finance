@@ -49,5 +49,56 @@
         "success": true
       }
     }
+  },
+  {
+    "source": "fmp",
+    "symbol": "CLUSD",
+    "data_points": 41,
+    "price_range": "$70.38 - $79.19",
+    "oscillators": {
+      "fisher_transform": {
+        "total_values": 41,
+        "meaningful_values": 32,
+        "success": true
+      },
+      "stochastic_cg": {
+        "total_values": 41,
+        "meaningful_values": 34,
+        "success": true
+      },
+      "super_smoother": {
+        "total_values": 41,
+        "meaningful_values": 41,
+        "success": true
+      },
+      "cycle_period": {
+        "total_values": 41,
+        "meaningful_values": 41,
+        "success": true
+      }
+    }
+  },
+  {
+    "source": "fmp",
+    "symbol": "NGUSD",
+    "data_points": 44,
+    "price_range": "$1.56 - $3.31",
+    "oscillators": {
+      "mama": {
+        "total_values": 44,
+        "meaningful_values": 44,
+        "success": true
+      },
+      "sinewave": {
+        "total_values": 44,
+        "meaningful_values": 39,
+        "success": true
+      },
+      "hilbert_transform": {
+        "total_values": 44,
+        "meaningful_values": 37,
+        "success": true
+      }
+    }
   }
 ]

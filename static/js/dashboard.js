@@ -247,19 +247,29 @@ async function createAssetChart() {
 
 function getOscillatorColor(oscillator) {
     const colors = {
+        // Kaufman Oscillators
         kama: '#FF6B6B',
         price_osc: '#4ECDC4',
         cci_enhanced: '#45B7D1',
         momentum: '#96CEB4',
         roc: '#FFEEAD',
         smi: '#DDA0DD',
-        efficiency_ratio: '#98FB98'
+        efficiency_ratio: '#98FB98',
+        // Ehlers DSP Oscillators
+        fisher_transform: '#FF9500',
+        stochastic_cg: '#9013FE',
+        super_smoother: '#00E676',
+        cycle_period: '#FF5722',
+        mama: '#2196F3',
+        sinewave: '#E91E63',
+        hilbert_transform: '#795548'
     };
     return colors[oscillator] || '#FF6B6B';
 }
 
 function getOscillatorYAxisConfig(oscillator) {
     const configs = {
+        // Kaufman Oscillators
         kama: {
             tickprefix: '$'
         },
@@ -286,6 +296,43 @@ function getOscillatorYAxisConfig(oscillator) {
             range: [0, 1],
             tick0: 0,
             dtick: 0.2
+        },
+        // Ehlers DSP Oscillators
+        fisher_transform: {
+            range: [-3, 3],
+            tick0: -3,
+            dtick: 1,
+            zeroline: true
+        },
+        stochastic_cg: {
+            range: [-100, 100],
+            tick0: -100,
+            dtick: 50,
+            zeroline: true
+        },
+        super_smoother: {
+            tickprefix: '$'
+        },
+        cycle_period: {
+            range: [10, 50],
+            tick0: 10,
+            dtick: 10,
+            title: 'Cycle Period (bars)'
+        },
+        mama: {
+            tickprefix: '$'
+        },
+        sinewave: {
+            range: [-1, 1],
+            tick0: -1,
+            dtick: 0.5,
+            zeroline: true
+        },
+        hilbert_transform: {
+            range: [-1, 1],
+            tick0: -1,
+            dtick: 0.5,
+            zeroline: true
         }
     };
     return configs[oscillator] || {};

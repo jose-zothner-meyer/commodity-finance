@@ -122,16 +122,27 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Kaufman Oscillators</label>
+                            <label class="form-label">Technical Oscillators</label>
                             <select class="form-select" id="oscillator-select">
                                 <option value="none">None</option>
-                                <option value="kama">KAMA (Adaptive MA)</option>
-                                <option value="price_osc">Price Oscillator</option>
-                                <option value="cci_enhanced">Enhanced CCI</option>
-                                <option value="momentum">Momentum</option>
-                                <option value="roc">Rate of Change</option>
-                                <option value="smi">Stochastic Momentum</option>
-                                <option value="efficiency_ratio">Efficiency Ratio</option>
+                                <optgroup label="Kaufman Oscillators">
+                                    <option value="kama">KAMA (Adaptive MA)</option>
+                                    <option value="price_osc">Price Oscillator</option>
+                                    <option value="cci_enhanced">Enhanced CCI</option>
+                                    <option value="momentum">Momentum</option>
+                                    <option value="roc">Rate of Change</option>
+                                    <option value="smi">Stochastic Momentum</option>
+                                    <option value="efficiency_ratio">Efficiency Ratio</option>
+                                </optgroup>
+                                <optgroup label="Ehlers DSP Oscillators">
+                                    <option value="fisher_transform">Fisher Transform</option>
+                                    <option value="stochastic_cg">Stochastic Center of Gravity</option>
+                                    <option value="super_smoother">Super Smoother</option>
+                                    <option value="cycle_period">Cycle Period Detection</option>
+                                    <option value="mama">MESA Adaptive MA (MAMA)</option>
+                                    <option value="sinewave">Sinewave Indicator</option>
+                                    <option value="hilbert_transform">Hilbert Transform</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="col-md-3">

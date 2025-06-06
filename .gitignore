@@ -1,8 +1,90 @@
+# API Keys and Sensitive Data
 api_keys.yaml
+api_keys.py
+.env
+*.env
+
+# Python Cache and Bytecode
 __pycache__/
 *.pyc
-.env
-.DS_Store
-postgres_data/
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django
 db.sqlite3
-pytest.ini 
+db.sqlite3-journal
+media/
+staticfiles/
+local_settings.py
+
+# Database
+postgres_data/
+*.db
+
+# Testing
+pytest.ini
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs
+*.log
+logs/
+
+# Temporary Files
+*.tmp
+*.temp
+tmp/
+
+# Node modules (if any frontend tools are added)
+node_modules/
+
+# Jupyter Notebooks
+.ipynb_checkpoints 
