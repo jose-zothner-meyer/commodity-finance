@@ -1,6 +1,5 @@
 # API Keys and Sensitive Data
 api_keys.yaml
-api_keys.py
 .env
 *.env
 
@@ -90,4 +89,3 @@ node_modules/
 .ipynb_checkpoints 
 
 # Sensitive API Keys and Configuration
-api_keys.py
