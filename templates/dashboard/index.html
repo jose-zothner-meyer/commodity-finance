@@ -206,27 +206,39 @@
                 </div>
             </div>
 
-            <!-- Energy Prices Tab -->
+            <!-- Energy System Tab -->
             <div class="tab-pane fade" id="energy" role="tabpanel">
                 <div class="controls-row">
                     <div class="row">
                         <div class="col-md-3">
-                            <label class="form-label">Market Area</label>
-                            <select class="form-select" id="energy-market">
-                                <option value="DE-LU">Germany-Luxembourg</option>
+                            <label class="form-label">Country</label>
+                            <select class="form-select" id="energy-country">
+                                <option value="DE">Germany</option>
                                 <option value="FR">France</option>
                                 <option value="ES">Spain</option>
                                 <option value="IT">Italy</option>
+                                <option value="AT">Austria</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Analysis Type</label>
+                            <select class="form-select" id="energy-data-type">
+                                <option value="price">Electricity Prices (€/MWh)</option>
                             </select>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Time Range</label>
                             <select class="form-select" id="energy-time-range">
                                 <option value="1d">1 Day</option>
-                                <option value="1w">1 Week</option>
-                                <option value="1m">1 Month</option>
-                                <option value="3m">3 Months</option>
+                                <option value="3d">3 Days</option>
+                                <option value="1w" selected>1 Week</option>
+                                <option value="2w">2 Weeks</option>
                             </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-primary mt-4" onclick="createEnergyChart()">
+                                <i class='bx bx-refresh'></i> Load Data
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -238,7 +250,8 @@
                                     <div id="energy-chart"></div>
                                 </div>
                                 <div class="source-info">
-                                    <i class='bx bx-link'></i> Source: ENTSO-E Transparency Platform
+                                    <i class='bx bx-link'></i> Source: ENTSO-E Transparency Platform (European Network of Transmission System Operators)
+                                    <br><small class="text-muted">Real-time electricity market prices from European power exchanges. Data includes day-ahead market prices for energy trading analysis.</small>
                                 </div>
                             </div>
                         </div>

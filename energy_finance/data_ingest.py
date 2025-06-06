@@ -1,7 +1,11 @@
 import requests
 import yaml
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
+import logging
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 class APIClient:
     def __init__(self, base_url: str):
@@ -13,15 +17,15 @@ class APIClient:
         """Load configuration from api_keys.yaml"""
         config_path = os.path.join(os.path.dirname(__file__), '..', 'api_keys.yaml')
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
-        except Exception as e:
-            raise ValueError(f"Failed to load configuration: {str(e)}")
+        except (FileNotFoundError, yaml.YAMLError) as e:
+            raise ValueError(f"Failed to load configuration: {str(e)}") from e
 
-    def get(self, endpoint: str, params: Dict[str, Any] = None) -> Any:
+    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """Make a GET request to the API"""
         url = f"{self.base_url}{endpoint}"
-        response = requests.get(url, params=params, headers=self.headers)
+        response = requests.get(url, params=params, headers=self.headers, timeout=30)
         response.raise_for_status()
         return response.json()
 
@@ -32,11 +36,118 @@ class PowerPriceAPIClient(APIClient):
         token = self.config.get('ENTSOE_TOKEN') or self.config.get('ENTSOE_API_KEY')
         if not token:
             raise ValueError("ENTSO-E API token missing in config")
-        self.headers = {"Authorization": f"Bearer {token}"}
+        # ENTSO-E uses securityToken parameter, not Bearer authentication
+        self.security_token = token
+        self.headers = {}  # No special headers needed for ENTSO-E
     
     def get_historical(self, area, start, end):
         return self.get("marketdata/dayaheadprices", {"biddingZone": area, "start": start, "end": end})
-
+    
+    def get_price_data(self, country: str, start_dt: datetime, end_dt: datetime):
+        """Get electricity price data for energy trading analysis"""
+        area_codes = {
+            'DE': '10Y1001A1001A82H',  # Germany
+            'FR': '10YFR-RTE------C',  # France
+            'ES': '10YES-REE------0',  # Spain
+            'IT': '10YIT-GRTN-----B',  # Italy
+            'AT': '10YAT-APG------L',  # Austria
+        }
+        
+        domain = area_codes.get(country, country)
+        period_start = start_dt.strftime('%Y%m%d0000')
+        period_end = end_dt.strftime('%Y%m%d0000')
+        
+        params = {
+            'documentType': 'A44',  # Price Document (Day-ahead Prices)
+            'in_Domain': domain,
+            'out_Domain': domain,
+            'periodStart': period_start,
+            'periodEnd': period_end,
+            'securityToken': self.security_token,
+        }
+        
+        try:
+            response = requests.get('https://web-api.tp.entsoe.eu/api', params=params, timeout=30)
+            response.raise_for_status()
+            return self._parse_entso_xml(response.content, 'price')
+        except requests.RequestException as e:
+            logger.error("Error fetching price data: %s", str(e))
+            return None
+    
+    def get_market_data(self, country: str, start_dt: datetime, end_dt: datetime, data_type: str = 'price'):
+        """Get energy market data - currently only price data is reliably available"""
+        if data_type == 'price':
+            return self.get_price_data(country, start_dt, end_dt)
+        else:
+            # For now, only price data is reliably available from ENTSO-E
+            return self.get_price_data(country, start_dt, end_dt)
+    
+    def _parse_entso_xml(self, xml_content, data_type):
+        """Parse ENTSO-E XML response into structured data"""
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.fromstring(xml_content)
+            
+            # Use the correct namespace from the XML response
+            ns = {'ns': 'urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:3'}
+            
+            dates = []
+            values = []
+            
+            # Find all TimeSeries elements
+            timeseries = root.findall('.//ns:TimeSeries', ns)
+            
+            if not timeseries:
+                logger.warning("No TimeSeries found in XML response")
+                return None
+            
+            for ts in timeseries:
+                # Find all Period elements within this TimeSeries
+                periods = ts.findall('ns:Period', ns)
+                
+                for period in periods:
+                    # Find the time interval start
+                    start_element = period.find('ns:timeInterval/ns:start', ns)
+                    if start_element is None or start_element.text is None:
+                        continue
+                    
+                    start = start_element.text
+                    
+                    # Find all Point elements within this Period
+                    points = period.findall('ns:Point', ns)
+                    
+                    for point in points:
+                        quantity_element = point.find('ns:price.amount', ns)  # Correct element name for prices
+                        position_element = point.find('ns:position', ns)
+                        
+                        if quantity_element is None or position_element is None:
+                            continue
+                        if quantity_element.text is None or position_element.text is None:
+                            continue
+                        
+                        try:
+                            quantity = float(quantity_element.text)
+                            position = int(position_element.text)
+                            # Calculate datetime for this point
+                            dt = datetime.strptime(start, '%Y-%m-%dT%H:%MZ') + timedelta(hours=position-1)
+                            date_str = dt.strftime('%Y-%m-%dT%H:%MZ')
+                            
+                            dates.append(date_str)
+                            values.append(quantity)
+                        except (ValueError, TypeError) as e:
+                            logger.debug("Error parsing point data: %s", str(e))
+                            continue
+            
+            if dates and values:
+                logger.info("Successfully parsed %d data points from XML", len(dates))
+                return {'dates': dates, 'values': values, 'type': data_type}
+            else:
+                logger.warning("No valid data points found in XML response")
+                return None
+                
+        except (ET.ParseError, ValueError) as e:
+            logger.error("Error parsing ENTSO-E XML: %s", str(e))
+            return None
 # Commodity clients
 class APINinjasCommodityClient(APIClient):
     def __init__(self):
@@ -57,7 +168,7 @@ class FMPCommoditiesClient(APIClient):
             raise ValueError("API key missing for FMP")
         self.api_key = api_key
 
-    def get(self, endpoint: str, params: Dict[str, Any] = None) -> Any:
+    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any:
         if params is None:
             params = {}
         params['apikey'] = self.api_key
@@ -127,7 +238,7 @@ class OpenWeatherAPIClient(APIClient):
             "end": end,
             "appid": self.api_key
         }
-        response = requests.get("https://history.openweathermap.org/data/2.5/history/city", params=params)
+        response = requests.get("https://history.openweathermap.org/data/2.5/history/city", params=params, timeout=30)
         response.raise_for_status()
         return response.json()
 
@@ -138,7 +249,7 @@ class OpenWeatherAPIClient(APIClient):
             "limit": 1,
             "appid": self.api_key
         }
-        response = requests.get("http://api.openweathermap.org/geo/1.0/direct", params=params)
+        response = requests.get("http://api.openweathermap.org/geo/1.0/direct", params=params, timeout=30)
         response.raise_for_status()
         return response.json()
 
@@ -150,7 +261,7 @@ class OpenWeatherAPIClient(APIClient):
             "appid": self.api_key,
             "units": "metric"
         }
-        response = requests.get("https://api.openweathermap.org/data/2.5/weather", params=params)
+        response = requests.get("https://api.openweathermap.org/data/2.5/weather", params=params, timeout=30)
         response.raise_for_status()
         return response.json()
 
@@ -189,20 +300,18 @@ class AlphaVantageAPIClient(APIClient):
             'WHEAT', 'CORN', 'COTTON', 'SUGAR', 'COFFEE'
         ] 
         
-    def get_historical(self, commodity: str, start: str, end: str, interval: str = "1d") -> Dict[str, Any]:
+    def get_historical(self, commodity: str, interval: str = "1d") -> Dict[str, Any]:
         """
         Fetch historical commodity data from Alpha Vantage.
         
         Args:
             commodity (str): The commodity symbol (e.g., 'WTI', 'BRENT', 'NATURAL_GAS')
-            start (str): Start date in YYYY-MM-DD format
-            end (str): End date in YYYY-MM-DD format
-            period (str): Time period (1d, 1w, 1mo)
+            interval (str): Time period (1d, 1w, 1mo)
         """
         base = "https://www.alphavantage.co/query?function={commodity}&interval={interval}&apikey=demo"
         intervalMapping = {"1d": "daily", "1w": "weekly", "1mo": "monthly", "3m": "quarterly", "1y": "annual"}
         url = base.format(commodity=commodity, interval=intervalMapping[interval])
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         data = response.json()
         if not data:

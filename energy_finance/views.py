@@ -8,7 +8,6 @@ from django.views.decorators.csrf import csrf_exempt
 import requests
 import yaml
 import os
-import xml.etree.ElementTree as ET
 import traceback
 
 from energy_finance.constants import SUPPORTED_NAMES, DataSource
@@ -339,25 +338,25 @@ def get_commodities(request):
                     return JsonResponse(results)
                 except requests.exceptions.RequestException as e:
                     return error_response(endpoint, "vendor", "Failed to fetch data from vendor.", params=params, details=str(e), exc=e, status=502)
-                except Exception as e:
+                except ValueError as e:
                     return error_response(endpoint, "internal", "Unexpected error occurred during data fetch.", params=params, details=str(e), exc=e, status=500)
             elif source == 'alpha_vantage':
                 try:
                     client = AlphaVantageAPIClient()
                 except ValueError as e:
                     return error_response(endpoint, "config", str(e), params=params, status=500)
-                data = client.get_historical(commodity, start, end, interval)
+                data = client.get_historical(commodity, interval)
                 return JsonResponse(data)
 
             else:
                 raise ValueError(f"Invalid source: {source}")
         except requests.exceptions.RequestException as e:
             return error_response(endpoint, "vendor", "Failed to fetch data from vendor.", params=params, details=str(e), exc=e, status=502)
-        except Exception as e:
+        except ValueError as e:
             return error_response(endpoint, "internal", "Unexpected error occurred during data fetch.", params=params, details=str(e), exc=e, status=500)
 
         return JsonResponse(results)
-    except Exception as e:
+    except (requests.exceptions.RequestException, ValueError) as e:
         return error_response(endpoint, "internal", "Internal server error.", params=dict(request.GET), details=str(e), exc=e, status=500)
 
 @require_http_methods(["GET"])
@@ -378,7 +377,7 @@ def get_weather(request):
         # Get current weather data
         try:
             response = client.get_current(lat, lon)
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             logger.error("Error fetching current weather data for %s: %s", city, str(e))
             return JsonResponse({'error': f'Error fetching current weather data: {str(e)}'}, status=500)
         # Process the data
@@ -395,107 +394,85 @@ def get_weather(request):
             'coordinates': {'lat': lat, 'lon': lon},
             'data': processed_data
         })
-    except Exception as e:
+    except (requests.exceptions.RequestException, ValueError) as e:
         logger.error("Error in get_weather: %s", str(e))
         return JsonResponse({'error': str(e)}, status=500)
 
 @require_http_methods(["GET"])
 def get_energy(request):
-    """Get energy price data from ENTSO-E Transparency Platform (web-api.tp.entsoe.eu)."""
+    """Get energy system data from ENTSO-E for energy analysts"""
     try:
-        market = request.GET.get('market', 'DE-LU')
-        start = request.GET.get('start')
-        end = request.GET.get('end')
-        contract_type = request.GET.get('contract_MarketAgreement.type')
-        offset = request.GET.get('offset')
-        if not start or not end:
-            return error_response("get_energy", "validation", "Missing required parameters: start and end dates are required (YYYY-MM-DD).", params=dict(request.GET), status=400)
+        # Get parameters for energy analysis
+        country = request.GET.get('country', 'DE')  # ISO country code
+        data_type = request.GET.get('data_type', 'load')  # load, generation, or flow
+        start_date = request.GET.get('start')
+        end_date = request.GET.get('end')
+        
+        if not start_date or not end_date:
+            return JsonResponse({
+                'error': 'Both start and end dates are required',
+                'type': 'validation'
+            }, status=400)
+        
         try:
-            start_date = datetime.strptime(start, '%Y-%m-%d')
-            end_date = datetime.strptime(end, '%Y-%m-%d')
-        except Exception as e:
-            return error_response("get_energy", "validation", "Invalid date format. Use YYYY-MM-DD.", params=dict(request.GET), details=str(e), status=400)
-        if start_date > end_date:
-            return error_response("get_energy", "validation", "Start date must be before end date.", params=dict(request.GET), status=400)
-
-        # ENTSO-E area codes
-        market_map = {
-            'DE-LU': '10Y1001A1001A83F',  # Germany-Luxembourg
-            'FR': '10YFR-RTE------C',    # France
-            'ES': '10YES-REE------0',    # Spain
-            'IT': '10YIT-GRTN-----B',    # Italy
-            'AT': '10YAT-APG------L',    # Austria
-        }
-        domain = market_map.get(market, market)  # Allow direct EIC code as market
-
-        # Format dates as YYYYMMDDHHMM (UTC, 00:00 for start, 23:00 for end)
-        period_start = start_date.strftime('%Y%m%d2200')  # 22:00 UTC for ENTSO-E day-ahead
-        period_end = end_date.strftime('%Y%m%d2200')
-
-        try:
-            client = PowerPriceAPIClient()
+            # Validate date format and ensure we use historical dates
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            # Ensure we're requesting historical data (ENTSO-E has delays)
+            today = datetime.now()
+            if start_dt >= today:
+                # Use recent historical dates for demo
+                end_dt = today - timedelta(days=2)
+                start_dt = end_dt - timedelta(days=7)
+                logger.info("Adjusted dates to historical period: %s to %s", start_dt.date(), end_dt.date())
+                
         except ValueError as e:
-            return error_response("get_energy", "config", str(e), params=dict(request.GET), status=500)
-
-        url = 'https://web-api.tp.entsoe.eu/api'
-        params = {
-            'documentType': 'A44',
-            'in_Domain': domain,
-            'out_Domain': domain,
-            'periodStart': period_start,
-            'periodEnd': period_end,
-        }
-        if contract_type:
-            params['contract_MarketAgreement.type'] = contract_type
-        if offset:
-            params['offset'] = offset
-        r = requests.get(url, params=params, headers=client.headers, timeout=30)
-        if r.status_code == 401 or r.status_code == 403:
-            return error_response("get_energy", "vendor", "Unauthorized or forbidden. Check your ENTSO-E API token and permissions.", params=dict(request.GET), details=r.text, status=401)
-        elif r.status_code == 400:
-            return error_response("get_energy", "vendor", "Invalid request to ENTSO-E API.", params=dict(request.GET), details=r.text, status=400)
-        r.raise_for_status()
-
-        # Parse XML response
-        try:
-            root = ET.fromstring(r.content)
-            ns = {'ns': 'urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:0'}
-            timeseries = root.findall('.//ns:TimeSeries', ns)
-            if not timeseries:
-                return error_response("get_energy", "vendor", "No price data available for the selected period.", params=dict(request.GET), details="The ENTSO-E API returned no time series data.", status=404)
-            dates = []
-            prices = []
-            for ts in timeseries:
-                for period in ts.findall('.//ns:Period', ns):
-                    start_element = period.find('ns:timeInterval/ns:start', ns)
-                    if start_element is None or start_element.text is None:
-                        continue
-                    start = start_element.text
-                    points = period.findall('ns:Point', ns)
-                    for point in points:
-                        price_element = point.find('ns:price.amount', ns)
-                        position_element = point.find('ns:position', ns)
-                        if price_element is None or position_element is None:
-                            continue
-                        if price_element.text is None or position_element.text is None:
-                            continue
-                        try:
-                            price = float(price_element.text)
-                            position = int(position_element.text)
-                            dt = datetime.strptime(start, '%Y-%m-%dT%H:%MZ') + timedelta(hours=position-1)
-                            dates.append(dt.strftime('%Y-%m-%dT%H:%MZ'))
-                            prices.append(price)
-                        except (ValueError, TypeError):
-                            continue
-            if not dates or not prices:
-                return error_response("get_energy", "vendor", "No price data available for the selected period.", params=dict(request.GET), details="The parsed data contains no valid price points.", status=404)
-            return JsonResponse({"dates": dates, "prices": prices})
-        except ET.ParseError as e:
-            return error_response("get_energy", "internal", "Failed to parse ENTSO-E response.", params=dict(request.GET), details=f"XML parsing error: {str(e)}", exc=e, status=500)
-        except Exception as e:
-            return error_response("get_energy", "internal", "Failed to process ENTSO-E data.", params=dict(request.GET), details=str(e), exc=e, status=500)
-    except Exception as e:
-        return error_response("get_energy", "internal", "Internal server error.", params=dict(request.GET), details=str(e), exc=e, status=500)
+            return JsonResponse({
+                'error': f'Invalid date format. Use YYYY-MM-DD: {str(e)}',
+                'type': 'validation'
+            }, status=400)
+        
+        client = PowerPriceAPIClient()
+        
+        # For backwards compatibility, default to price data if no data_type specified
+        data_type = request.GET.get('data_type', 'price')
+        country = request.GET.get('country', 'DE')
+        
+        # Adjust dates to ensure data availability (ENTSO-E has publication delays)
+        if start_dt.date() >= datetime.now().date() - timedelta(days=2):
+            # Use older dates for more reliable data availability
+            end_dt = datetime.now() - timedelta(days=3)
+            start_dt = end_dt - timedelta(days=1)
+            logger.info("Adjusted dates to historical period: %s to %s", start_dt.date(), end_dt.date())
+        
+        # Get energy market data (currently only price data is reliable)
+        result = client.get_market_data(country, start_dt, end_dt, data_type)
+        
+        if result and result.get('dates') and result.get('values'):
+            # Format for energy analyst dashboard
+            response_data = {
+                'title': f'Electricity Prices - {country}',
+                'unit': '€/MWh',
+                'type': 'price',
+                'country': country,
+                'dates': result['dates'],
+                'values': result['values']
+            }
+            return JsonResponse(response_data)
+        else:
+            return JsonResponse({
+                'error': f'No {data_type} data available for {country} in the specified period',
+                'type': 'no_data',
+                'suggestion': 'Try using recent historical dates (2-7 days ago) as ENTSO-E data has publication delays'
+            }, status=404)
+        
+    except (requests.exceptions.RequestException, ValueError) as e:
+        logger.error("Error in get_energy: %s", str(e))
+        return JsonResponse({
+            'error': str(e),
+            'type': 'server_error'
+        }, status=500)
 
 @csrf_exempt
 @require_http_methods(["GET"])

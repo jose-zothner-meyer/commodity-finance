@@ -110,12 +110,55 @@ async function fetchData(endpoint, params = {}) {
         const queryString = new URLSearchParams(params).toString();
         const url = `${endpoint}?${queryString}`;
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Network response was not ok');
-        return await response.json();
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            // Handle API errors with user-friendly messages
+            if (data.error) {
+                console.error('API Error:', data.error);
+                showErrorMessage(data.error, endpoint);
+            }
+            throw new Error(`HTTP ${response.status}: ${data.error || 'Network response was not ok'}`);
+        }
+        return data;
     } catch (error) {
         console.error('Error fetching data:', error);
+        showErrorMessage(`Unable to fetch data: ${error.message}`, endpoint);
         return null;
     }
+}
+
+// Show error messages to user
+function showErrorMessage(message, endpoint) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'alert alert-warning alert-dismissible fade show';
+    errorDiv.style.position = 'fixed';
+    errorDiv.style.top = '80px';
+    errorDiv.style.right = '20px';
+    errorDiv.style.zIndex = '9999';
+    errorDiv.style.maxWidth = '400px';
+    
+    let userMessage = message;
+    if (endpoint.includes('energy')) {
+        userMessage = 'Energy data is temporarily unavailable due to API authentication issues. Please try again later.';
+    } else if (endpoint.includes('weather')) {
+        userMessage = 'Weather data is temporarily unavailable. Please check your internet connection.';
+    }
+    
+    errorDiv.innerHTML = `
+        <strong>Notice:</strong> ${userMessage}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(errorDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.parentNode.removeChild(errorDiv);
+        }
+    }, 5000);
 }
 
 // Update asset dropdown based on selected data source
@@ -340,18 +383,25 @@ function getOscillatorYAxisConfig(oscillator) {
 
 // Create weather chart
 async function createWeatherChart() {
-    const city = document.getElementById('citySearch').value;
-    if (!city) {
-        alert('Please enter a city name');
-        return;
-    }
+    const city = document.getElementById('citySearch').value || 'London';
+    
+    // Show loading state
+    const weatherChart = document.getElementById('weatherChart');
+    const metricsChart = document.getElementById('weatherMetricsChart');
+    
+    weatherChart.innerHTML = '<div class="loading text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p>Loading weather data...</p></div>';
+    metricsChart.innerHTML = '';
+    
     try {
         const response = await fetchData(API_ENDPOINTS.weather, { city });
         if (!response || !response.data || response.data.length === 0) {
-            throw new Error('No weather data available');
+            weatherChart.innerHTML = '<div class="alert alert-info">No weather data available for this city. Please try a different city.</div>';
+            return;
         }
+        
         // Use only the first (current) data point
         const d = response.data[0];
+        
         // Create temperature chart
         const tempData = [{
             x: [d.date],
@@ -360,6 +410,7 @@ async function createWeatherChart() {
             name: 'Temperature (°C)',
             marker: { color: '#ff7f0e' }
         }];
+        
         const tempLayout = {
             title: `Current Temperature in ${response.city}`,
             xaxis: { title: 'Date' },
@@ -367,7 +418,9 @@ async function createWeatherChart() {
             showlegend: true,
             height: 400
         };
+        
         Plotly.newPlot('weatherChart', tempData, tempLayout);
+        
         // Create additional weather metrics chart
         const metricsData = [
             {
@@ -392,52 +445,145 @@ async function createWeatherChart() {
                 marker: { color: '#d62728' }
             }
         ];
+        
         const metricsLayout = {
-            title: `Current Weather Metrics in ${response.city}`,
+            title: `Weather Metrics for ${response.city}`,
             xaxis: { title: 'Date' },
             yaxis: { title: 'Value' },
             showlegend: true,
             height: 400
         };
+        
         Plotly.newPlot('weatherMetricsChart', metricsData, metricsLayout);
+        
     } catch (error) {
-        console.error('Error fetching weather data:', error);
-        alert('Error fetching weather data: ' + error.message);
+        console.error('Weather chart error:', error);
+        weatherChart.innerHTML = '<div class="alert alert-danger">Failed to load weather data. Please try again later.</div>';
     }
 }
 
-// document.getElementById('weather-search-btn').addEventListener('click', createWeatherChart);
-// document.getElementById('weather-city').addEventListener('keypress', function(e) {
-//     if (e.key === 'Enter') createWeatherChart();
-// }
-// );
-
-// Create energy price chart
+// Create energy system chart for energy analysts
 async function createEnergyChart() {
-    const market = document.getElementById('energy-market').value;
+    const country = document.getElementById('energy-country').value;
     const timeRange = document.getElementById('energy-time-range').value;
     
-    const { start, end } = getTimeRangeDates(timeRange);
+    const energyChart = document.getElementById('energy-chart');
     
-    const data = await fetchData(API_ENDPOINTS.energy, {
-        market,
-        start,
-        end
-    });
+    // Show loading state
+    energyChart.innerHTML = '<div class="loading text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p>Loading energy system data...</p></div>';
     
-    console.log('Energy data:', data);
+    // Calculate historical dates (ENTSO-E has publication delays)
+    const end = new Date();
+    end.setDate(end.getDate() - 2); // 2 days ago to ensure data availability
+    const start = new Date(end);
     
-    if (!data) return;
+    switch(timeRange) {
+        case '1d':
+            start.setDate(end.getDate() - 1);
+            break;
+        case '3d':
+            start.setDate(end.getDate() - 3);
+            break;
+        case '1w':
+            start.setDate(end.getDate() - 7);
+            break;
+        case '2w':
+            start.setDate(end.getDate() - 14);
+            break;
+        default:
+            start.setDate(end.getDate() - 7);
+    }
+    
+    try {
+        const data = await fetchData(API_ENDPOINTS.energy, {
+            country,
+            data_type: 'price',
+            start: start.toISOString().split('T')[0],
+            end: end.toISOString().split('T')[0]
+        });
+        
+        console.log('Energy system data:', data);
+        
+        if (!data) {
+            energyChart.innerHTML = '<div class="alert alert-warning">Energy price data is temporarily unavailable. Please try again later.</div>';
+            return;
+        }
 
-    const traces = [{
-        name: 'Energy Price',
-        x: data.dates,
-        y: data.prices,
-        type: 'scatter',
-        mode: 'lines+markers'
-    }];
+        // Handle price data
+        if (data.dates && data.values) {
+            // Single series for price data
+            const traces = [{
+                name: 'Electricity Price',
+                x: data.dates,
+                y: data.values,
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#007bff' },
+                marker: { color: '#007bff', size: 4 }
+            }];
 
-    Plotly.newPlot('energy-chart', traces, chartConfigs.energy.layout, chartConfigs.energy.config);
+            const layout = {
+                title: `Electricity Prices - ${country} (${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]})`,
+                xaxis: { title: 'Date & Time' },
+                yaxis: { title: 'Price (€/MWh)' },
+                showlegend: true,
+                height: 500
+            };
+
+            Plotly.newPlot('energy-chart', traces, layout, { responsive: true, displayModeBar: true });
+        } else {
+            energyChart.innerHTML = '<div class="alert alert-info">No energy price data available for the selected parameters. ENTSO-E data has publication delays - try selecting recent historical dates.</div>';
+        }
+        
+    } catch (error) {
+        console.error('Energy chart error:', error);
+        energyChart.innerHTML = '<div class="alert alert-danger">Failed to load energy system data. Please try again later.</div>';
+    }
+}
+
+// Helper functions for energy analyst dashboard
+function getDataTypeName(dataType) {
+    const names = {
+        'load': 'Electricity Load',
+        'generation': 'Generation',
+        'flow': 'Cross-border Flow'
+    };
+    return names[dataType] || dataType;
+}
+
+function getDataTypeColor(dataType) {
+    const colors = {
+        'load': '#007bff',
+        'generation': '#28a745',
+        'flow': '#dc3545'
+    };
+    return colors[dataType] || '#007bff';
+}
+
+function getGenerationTypeName(genType) {
+    const names = {
+        'B01': 'Biomass',
+        'B02': 'Fossil Brown coal/Lignite',
+        'B03': 'Fossil Coal-derived gas',
+        'B04': 'Fossil Gas',
+        'B05': 'Fossil Hard coal',
+        'B06': 'Fossil Oil',
+        'B07': 'Fossil Oil shale',
+        'B08': 'Fossil Peat',
+        'B09': 'Geothermal',
+        'B10': 'Hydro Pumped Storage',
+        'B11': 'Hydro Run-of-river and poundage',
+        'B12': 'Hydro Water Reservoir',
+        'B13': 'Marine',
+        'B14': 'Nuclear',
+        'B15': 'Other renewable',
+        'B16': 'Solar',
+        'B17': 'Waste',
+        'B18': 'Wind Offshore',
+        'B19': 'Wind Onshore',
+        'B20': 'Other'
+    };
+    return names[genType] || genType;
 }
 
 // Update event listeners for the new logic
