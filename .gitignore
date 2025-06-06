@@ -88,3 +88,6 @@ node_modules/
 
 # Jupyter Notebooks
 .ipynb_checkpoints 
+
+# Sensitive API Keys and Configuration
+api_keys.py
