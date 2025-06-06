@@ -274,6 +274,78 @@ class AlphaVantageAPIClient(APIClient):
         if not api_key:
             raise ValueError("API key missing for Alpha Vantage")
         self.api_key = api_key
+        
+        # Import cache here to avoid circular imports
+        try:
+            from django.core.cache import cache
+            self.cache = cache
+        except ImportError:
+            self.cache = None
+        
+        # Rate limiting - Alpha Vantage has 5 calls per minute for free tier
+        self.rate_limit_calls = 5
+        self.rate_limit_window = 60  # seconds
+        self._api_calls = []
+
+    def _check_rate_limit(self):
+        """Check if we're within API rate limits"""
+        import time
+        current_time = time.time()
+        
+        # Remove calls older than the rate limit window
+        self._api_calls = [call_time for call_time in self._api_calls 
+                          if current_time - call_time < self.rate_limit_window]
+        
+        # Check if we can make another call
+        if len(self._api_calls) >= self.rate_limit_calls:
+            # Need to wait
+            oldest_call = min(self._api_calls)
+            wait_time = self.rate_limit_window - (current_time - oldest_call)
+            if wait_time > 0:
+                import time
+                time.sleep(wait_time + 1)  # Add 1 second buffer
+        
+        # Record this call
+        self._api_calls.append(current_time)
+    
+    def _make_request_with_retry(self, params: dict, max_retries: int = 3) -> dict:
+        """Make API request with retry logic and rate limiting"""
+        import time
+        
+        for attempt in range(max_retries):
+            try:
+                # Check rate limit before making call
+                self._check_rate_limit()
+                
+                response = requests.get(self.base_url, params=params, timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                # Check for Alpha Vantage API errors
+                if "Error Message" in data:
+                    raise ValueError(f"Alpha Vantage API Error: {data['Error Message']}")
+                
+                if "Note" in data:
+                    # Rate limit hit, wait and retry
+                    if attempt < max_retries - 1:
+                        time.sleep(60)  # Wait 1 minute
+                        continue
+                    else:
+                        raise ValueError(f"Alpha Vantage rate limit exceeded: {data['Note']}")
+                
+                return data
+                
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    # Wait before retry (exponential backoff)
+                    wait_time = (2 ** attempt) * 1
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise e
+        
+        raise ValueError("Max retries exceeded")
 
     def get_commodity_data(self, commodity: str) -> Dict[str, Any]:
         """
@@ -293,33 +365,175 @@ class AlphaVantageAPIClient(APIClient):
 
     def get_available_commodities(self) -> List[str]:
         """
-        Returns a list of available commodity symbols.
+        Returns a list of available commodity symbols from Alpha Vantage with caching.
+        Expanded list based on Alpha Vantage API documentation.
         """
-        return [
-            'WTI', 'BRENT', 'NATURAL_GAS', 'COPPER', 'ALUMINUM',
-            'WHEAT', 'CORN', 'COTTON', 'SUGAR', 'COFFEE'
-        ] 
+        # Create cache key
+        cache_key = 'alpha_vantage_available_commodities'
+        
+        # Try to get from cache first (cache for 24 hours since this rarely changes)
+        if self.cache:
+            cached_data = self.cache.get(cache_key)
+            if cached_data:
+                return cached_data
+        
+        commodities = [
+            # Energy Commodities
+            'WTI',          # West Texas Intermediate Crude Oil
+            'BRENT',        # Brent Crude Oil
+            'NATURAL_GAS',  # Natural Gas
+            'HEATING_OIL',  # Heating Oil
+            'GASOLINE',     # Gasoline/RBOB
+            
+            # Precious Metals  
+            'COPPER',       # Copper
+            'ALUMINUM',     # Aluminum
+            'ZINC',         # Zinc
+            'NICKEL',       # Nickel
+            'LEAD',         # Lead
+            'TIN',          # Tin
+            
+            # Agricultural Commodities
+            'WHEAT',        # Wheat
+            'CORN',         # Corn
+            'COTTON',       # Cotton
+            'SUGAR',        # Sugar
+            'COFFEE',       # Coffee
+            'COCOA',        # Cocoa
+            'RICE',         # Rice
+            'OATS',         # Oats
+            'SOYBEANS',     # Soybeans
+            
+            # Additional commodities (if supported by Alpha Vantage)
+            'GOLD',         # Gold (if available as direct function)
+            'SILVER',       # Silver (if available as direct function)
+            'PLATINUM',     # Platinum (if available as direct function)
+            'PALLADIUM',    # Palladium (if available as direct function)
+        ]
+        
+        # Cache the results for 24 hours (86400 seconds)
+        if self.cache:
+            self.cache.set(cache_key, commodities, timeout=86400)
+        
+        return commodities 
         
     def get_historical(self, commodity: str, interval: str = "1d") -> Dict[str, Any]:
         """
-        Fetch historical commodity data from Alpha Vantage.
+        Fetch historical commodity data from Alpha Vantage with caching.
         
         Args:
             commodity (str): The commodity symbol (e.g., 'WTI', 'BRENT', 'NATURAL_GAS')
             interval (str): Time period (1d, 1w, 1mo)
         """
-        base = "https://www.alphavantage.co/query?function={commodity}&interval={interval}&apikey=demo"
+        # Create cache key
+        cache_key = f'alpha_vantage_historical_{commodity}_{interval}'
+        
+        # Try to get from cache first (cache for 1 hour for Alpha Vantage data)
+        if self.cache:
+            cached_data = self.cache.get(cache_key)
+            if cached_data:
+                return cached_data
+        
         intervalMapping = {"1d": "daily", "1w": "weekly", "1mo": "monthly", "3m": "quarterly", "1y": "annual"}
-        url = base.format(commodity=commodity, interval=intervalMapping[interval])
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        params = {
+            'function': commodity,
+            'interval': intervalMapping.get(interval, "daily"),
+            'apikey': self.api_key
+        }
+        
+        # Use retry logic for API calls
+        data = self._make_request_with_retry(params)
+        
         if not data:
-            return {"dates": [], "values": []}
-        data = data["data"]
-        dates = []
-        values = []
-        for obj in data:
-            dates.append(obj["date"])
-            values.append(obj["value"])
-        return {"dates": dates, "values": values}
+            result = {"dates": [], "values": []}
+        else:
+            # Check if response contains rate limit information
+            if "Information" in data:
+                # API rate limit exceeded - return empty result with error info
+                print(f"Alpha Vantage API rate limit: {data['Information']}")
+                result = {"dates": [], "values": [], "error": "API rate limit exceeded"}
+            elif "data" in data:
+                # Normal response with data
+                data_points = data["data"]
+                dates = []
+                values = []
+                for obj in data_points:
+                    dates.append(obj["date"])
+                    values.append(obj["value"])
+                result = {"dates": dates, "values": values}
+            else:
+                # Unknown response format
+                print(f"Unexpected Alpha Vantage response format: {data}")
+                result = {"dates": [], "values": [], "error": "Unexpected API response format"}
+        
+        # Cache the results for 1 hour (3600 seconds)
+        if self.cache:
+            self.cache.set(cache_key, result, timeout=3600)
+        
+        return result
+
+    def get_historical_with_dates(self, commodity: str, start_date: str, end_date: str, interval: str = "1d") -> Dict[str, Any]:
+        """
+        Fetch historical commodity data from Alpha Vantage with date filtering and caching.
+        
+        Args:
+            commodity (str): The commodity symbol (e.g., 'WTI', 'BRENT', 'NATURAL_GAS')
+            start_date (str): Start date in YYYY-MM-DD format
+            end_date (str): End date in YYYY-MM-DD format
+            interval (str): Time period (1d, 1w, 1mo)
+        
+        Returns:
+            dict: Historical data with dates and values filtered by date range
+        """
+        from datetime import datetime
+        
+        # Create cache key for the filtered data
+        cache_key = f'alpha_vantage_filtered_{commodity}_{start_date}_{end_date}_{interval}'
+        
+        # Try to get from cache first (cache for 30 minutes for filtered data)
+        if self.cache:
+            cached_data = self.cache.get(cache_key)
+            if cached_data:
+                return cached_data
+        
+        # Get all historical data first (this will use its own caching)
+        all_data = self.get_historical(commodity, interval)
+        
+        if not all_data or 'dates' not in all_data or not all_data['dates']:
+            # Pass through any error information from get_historical
+            return all_data if all_data else {"dates": [], "values": []}
+        
+        # Parse date range
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            # If date parsing fails, return all data
+            return all_data
+        
+        # Filter data by date range
+        filtered_dates = []
+        filtered_values = []
+        
+        for i, date_str in enumerate(all_data['dates']):
+            try:
+                # Parse the date from Alpha Vantage response
+                data_dt = datetime.strptime(date_str, '%Y-%m-%d')
+                if start_dt <= data_dt <= end_dt:
+                    filtered_dates.append(date_str)
+                    if i < len(all_data['values']):
+                        filtered_values.append(all_data['values'][i])
+            except ValueError:
+                # Skip invalid dates
+                continue
+        
+        result = {
+            "dates": filtered_dates,
+            "values": filtered_values
+        }
+        
+        # Cache the filtered results for 30 minutes (1800 seconds)
+        if self.cache:
+            self.cache.set(cache_key, result, timeout=1800)
+        
+        return result

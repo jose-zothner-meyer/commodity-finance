@@ -28,6 +28,37 @@ const ASSETS_BY_SOURCE = {
         { symbol: 'zinc', name: 'Zinc' },
         { symbol: 'nickel', name: 'Nickel' },
         { symbol: 'lead', name: 'Lead' }
+    ],
+    alpha_vantage: [
+        // Energy Commodities
+        { symbol: 'WTI', name: 'WTI Crude Oil' },
+        { symbol: 'BRENT', name: 'Brent Crude Oil' },
+        { symbol: 'NATURAL_GAS', name: 'Natural Gas' },
+        { symbol: 'HEATING_OIL', name: 'Heating Oil' },
+        { symbol: 'GASOLINE', name: 'Gasoline' },
+        
+        // Precious Metals
+        { symbol: 'COPPER', name: 'Copper' },
+        { symbol: 'ALUMINUM', name: 'Aluminum' },
+        { symbol: 'ZINC', name: 'Zinc' },
+        { symbol: 'NICKEL', name: 'Nickel' },
+        { symbol: 'LEAD', name: 'Lead' },
+        { symbol: 'TIN', name: 'Tin' },
+        { symbol: 'GOLD', name: 'Gold' },
+        { symbol: 'SILVER', name: 'Silver' },
+        { symbol: 'PLATINUM', name: 'Platinum' },
+        { symbol: 'PALLADIUM', name: 'Palladium' },
+        
+        // Agricultural Commodities
+        { symbol: 'WHEAT', name: 'Wheat' },
+        { symbol: 'CORN', name: 'Corn' },
+        { symbol: 'COTTON', name: 'Cotton' },
+        { symbol: 'SUGAR', name: 'Sugar' },
+        { symbol: 'COFFEE', name: 'Coffee' },
+        { symbol: 'COCOA', name: 'Cocoa' },
+        { symbol: 'RICE', name: 'Rice' },
+        { symbol: 'OATS', name: 'Oats' },
+        { symbol: 'SOYBEANS', name: 'Soybeans' }
     ]
 };
 

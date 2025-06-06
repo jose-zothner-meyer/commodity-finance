@@ -1,0 +1,23 @@
+{
+  "fmp": [
+    "GCUSD", "SIUSD", "CLUSD", "NGUSD", "PLUSD", "PAUSD",
+    "WHUSD", "CNUSD", "SYUSD", "KEUSD", "CCUSD", "CTUSD", "SBUSD",
+    "CPUSD", "ALUSD", "ZNUSD", "NIUSD", "HOUSD", "RBUSD"
+  ],
+  "commodity_price_api": [
+    "wheat", "corn", "soybean", "coffee", "sugar", "cocoa", "cotton",
+    "rice", "oats", "gold", "silver", "copper", "aluminum", "zinc",
+    "nickel", "lead", "tin", "platinum", "palladium"
+  ],
+  "api_ninjas": [
+    "copper", "aluminum", "zinc", "nickel", "lead", "tin",
+    "gold", "silver", "platinum", "palladium", "crude_oil",
+    "natural_gas", "wheat", "corn", "soybeans", "coffee", "sugar"
+  ],
+  "alpha_vantage": [
+    "WTI", "BRENT", "NATURAL_GAS", "HEATING_OIL", "GASOLINE", "COPPER", "ALUMINUM", "ZINC", 
+    "NICKEL", "LEAD", "TIN", "GOLD", "SILVER", "PLATINUM", "PALLADIUM",
+    "WHEAT", "CORN", "COTTON", "SUGAR", "COFFEE", "COCOA", 
+    "RICE", "OATS", "SOYBEANS"
+  ]
+}

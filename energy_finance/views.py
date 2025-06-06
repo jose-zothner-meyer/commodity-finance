@@ -345,8 +345,86 @@ def get_commodities(request):
                     client = AlphaVantageAPIClient()
                 except ValueError as e:
                     return error_response(endpoint, "config", str(e), params=params, status=500)
-                data = client.get_historical(commodity, interval)
-                return JsonResponse(data)
+                
+                try:
+                    # Get historical data with date filtering support
+                    data = client.get_historical_with_dates(commodity, start, end, interval)
+                    
+                    # Check if the response contains an error (e.g., rate limit exceeded)
+                    if data and 'error' in data:
+                        return error_response(endpoint, "vendor", data['error'], params=params, status=429)
+                    
+                    if not data or 'dates' not in data or not data['dates']:
+                        return error_response(endpoint, "vendor", 'No price data available for the specified date range', params=params, status=404)
+                    
+                    results = {
+                        "dates": data['dates'],
+                        "prices": data['values']
+                    }
+                    
+                    # Calculate oscillators if requested for Alpha Vantage data
+                    if oscillator != 'none' and len(results["prices"]) > 0:
+                        osc_values = []
+                        osc_dates = results["dates"]
+                        
+                        # Kaufman Oscillators
+                        if oscillator == 'kama':
+                            osc_values = calculate_kaufman_adaptive_moving_average(results["prices"])
+                        elif oscillator == 'price_osc':
+                            osc_values = calculate_price_oscillator(results["prices"])
+                        elif oscillator == 'cci_enhanced':
+                            # Use closing prices for high/low estimation
+                            high_prices = results["prices"]  # Alpha Vantage only provides single price value
+                            low_prices = results["prices"]
+                            osc_values = calculate_commodity_channel_index_enhanced(high_prices, low_prices, results["prices"])
+                        elif oscillator == 'momentum':
+                            osc_values = calculate_momentum_oscillator(results["prices"])
+                        elif oscillator == 'roc':
+                            osc_values = calculate_rate_of_change_oscillator(results["prices"])
+                        elif oscillator == 'smi':
+                            # For SMI, use closing prices as approximation for high/low
+                            high_prices = results["prices"]
+                            low_prices = results["prices"]
+                            smi_k, _ = calculate_stochastic_momentum_index(high_prices, low_prices, results["prices"])
+                            osc_values = smi_k
+                        elif oscillator == 'efficiency_ratio':
+                            osc_values = calculate_kaufman_efficiency_ratio(results["prices"])
+                        
+                        # Ehlers Digital Signal Processing Oscillators
+                        elif oscillator == 'fisher_transform':
+                            osc_values = calculate_ehlers_fisher_transform(results["prices"])
+                        elif oscillator == 'stochastic_cg':
+                            # Use closing prices as approximation for high/low
+                            high_prices = results["prices"]
+                            low_prices = results["prices"]
+                            osc_values = calculate_ehlers_stochastic_cg(high_prices, low_prices, results["prices"])
+                        elif oscillator == 'super_smoother':
+                            osc_values = calculate_ehlers_super_smoother(results["prices"])
+                        elif oscillator == 'cycle_period':
+                            osc_values = calculate_ehlers_cycle_period(results["prices"])
+                        elif oscillator == 'mama':
+                            mama_values, _ = calculate_ehlers_mama(results["prices"])
+                            osc_values = mama_values
+                        elif oscillator == 'sinewave':
+                            sine_values, _ = calculate_ehlers_sinewave_indicator(results["prices"])
+                            osc_values = sine_values
+                        elif oscillator == 'hilbert_transform':
+                            osc_values = calculate_ehlers_hilbert_transform(results["prices"])
+                        
+                        # Add oscillator data to results
+                        if osc_values:
+                            results["oscillator"] = {
+                                "values": osc_values,
+                                "dates": osc_dates,
+                                "name": oscillator.upper()
+                            }
+                    
+                    return JsonResponse(results)
+                    
+                except requests.exceptions.RequestException as e:
+                    return error_response(endpoint, "vendor", "Failed to fetch data from Alpha Vantage.", params=params, details=str(e), exc=e, status=502)
+                except ValueError as e:
+                    return error_response(endpoint, "internal", "Unexpected error occurred during Alpha Vantage data fetch.", params=params, details=str(e), exc=e, status=500)
 
             else:
                 raise ValueError(f"Invalid source: {source}")
