@@ -10,8 +10,8 @@ import yaml
 import os
 import traceback
 
-from energy_finance.constants import SUPPORTED_NAMES, DataSource
-from energy_finance.data_ingest import (
+from apps.core.constants import SUPPORTED_NAMES, DataSource
+from apps.core.data_ingest import (
     PowerPriceAPIClient,
     EnergyChartsAPIClient,
     APINinjasCommodityClient,
@@ -23,7 +23,7 @@ from energy_finance.data_ingest import (
     FREDAPIClient
 )
 # Import custom Kaufman oscillators and Ehlers digital signal processing oscillators
-from energy_finance.oscillators import (
+from apps.core.oscillators import (
     # Kaufman oscillators
     calculate_kaufman_adaptive_moving_average,
     calculate_price_oscillator,
@@ -43,7 +43,7 @@ from energy_finance.oscillators import (
     calculate_ehlers_hilbert_transform
 )
 # Import portfolio analytics
-from energy_finance.portfolio import (
+from apps.core.portfolio import (
     PortfolioAnalyzer,
     MonteCarloSimulator,
     PortfolioOptimizer,
@@ -647,7 +647,7 @@ def get_energy(request):
 @require_http_methods(["GET"])
 def get_commodities_list(request):
     source = request.GET.get('source', 'api_ninjas')
-    json_path = os.path.join(os.path.dirname(__file__), '..', 'commodities_by_source.json')
+    json_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'commodities_by_source.json')
     print(f"DEBUG: commodities_by_source.json path: {json_path}")
     with open(json_path, encoding='utf-8') as f:
         data = json.load(f)
@@ -761,7 +761,7 @@ def get_available_symbols_by_data_source(request):
         return JsonResponse({"error": "Invalid source"}, status=400)
 
 def index(request):
-    return render(request, 'energy_finance/index.html')
+    return render(request, 'dashboard/index.html')
 
 @require_http_methods(["GET"])
 def get_commodity_data(request):

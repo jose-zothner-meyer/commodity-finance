@@ -36,7 +36,7 @@ if not settings.configured:
     )
     django.setup()
 
-from energy_finance.data_ingest import AlphaVantageAPIClient
+from apps.core.data_ingest import AlphaVantageAPIClient
 
 
 def validate_configuration_consistency():

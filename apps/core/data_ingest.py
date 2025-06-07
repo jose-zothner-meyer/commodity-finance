@@ -16,7 +16,7 @@ class APIClient:
 
     def _load_config(self) -> Dict[str, str]:
         """Load configuration from api_keys.yaml"""
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'api_keys.yaml')
+        config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'api_keys.yaml')
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
