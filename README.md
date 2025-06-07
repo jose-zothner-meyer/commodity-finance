@@ -240,34 +240,78 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser
 ### 📁 **Directory Structure**
 ```
 commodity-tracker-1/
-├── 📊 Core Analytics
-│   ├── energy_finance/           # Main Django application
-│   │   ├── oscillators.py       # 14 advanced oscillator implementations
-│   │   ├── views.py             # API endpoints and data processing
-│   │   ├── data_ingest.py       # Multi-source data integration
-│   │   └── constants.py         # Configuration and enums
+├── 🎛️ Django Apps (Multi-App Architecture)
+│   ├── apps/
+│   │   ├── api/                 # RESTful API endpoints
+│   │   │   ├── views.py         # API response handlers
+│   │   │   └── urls.py          # API routing
+│   │   ├── core/                # Core business logic
+│   │   │   ├── oscillators.py   # 14 advanced oscillator implementations
+│   │   │   ├── portfolio.py     # Portfolio analytics & Monte Carlo
+│   │   │   ├── data_ingest.py   # Multi-source data integration
+│   │   │   └── constants.py     # Configuration and enums
+│   │   └── dashboard/           # Dashboard views and controllers
+│   │       ├── views.py         # Dashboard render logic
+│   │       └── urls.py          # Dashboard routing
+│   
+├── ⚙️ Configuration (Environment-Specific)
+│   ├── config/
+│   │   ├── settings/
+│   │   │   ├── base.py          # Common settings
+│   │   │   ├── development.py   # Development configuration
+│   │   │   ├── production.py    # Production configuration
+│   │   │   └── testing.py       # Test environment settings
+│   │   ├── urls.py              # Main URL routing
+│   │   └── wsgi.py              # WSGI application
 │   
 ├── 🎨 User Interface  
-│   ├── templates/dashboard/      # HTML templates
-│   │   └── index.html           # Main dashboard interface
-│   ├── static/js/               # Frontend JavaScript
-│   │   └── dashboard.js         # Chart rendering and interactions
+│   ├── templates/dashboard/     # HTML templates
+│   │   └── index.html          # Multi-tab dashboard interface
+│   ├── static/js/              # Frontend JavaScript
+│   │   └── dashboard.js        # Interactive charts & portfolio analytics
 │   
-├── 🧪 Quality Assurance
-│   ├── test_oscillator_integration.py  # Comprehensive test suite
-│   ├── oscillator_test_results.json    # Test results archive
+├── 📊 Legacy Core Analytics (Maintained for Compatibility)
+│   ├── energy_finance/         # Original main application
+│   │   ├── views.py           # API endpoints and data processing
+│   │   ├── data_ingest.py     # Legacy data integration
+│   │   └── urls.py            # Legacy routing
+│   
+├── 🗃️ Data & Configuration
+│   ├── data/
+│   │   ├── api_keys.yaml       # API configuration
+│   │   ├── commodities_by_source.json # Commodity mappings
+│   │   └── oscillator_test_results.json # Test results archive
+│   ├── api_keys.yaml           # Main API keys (create this)
+│   └── db.sqlite3              # Local database
 │   
 ├── 📚 Documentation
-│   ├── README.md                        # This file
-│   ├── KAUFMAN_OSCILLATORS.md          # Kaufman oscillators documentation
-│   ├── EHLERS_OSCILLATORS_INTEGRATION.md # Ehlers oscillators documentation
-│   └── PROJECT_COMPLETION_REPORT.md     # Complete project report
+│   ├── docs/
+│   │   ├── api/                # API documentation
+│   │   ├── deployment/         # Deployment guides
+│   │   └── technical/          # Technical documentation
+│   ├── README.md               # This file
+│   └── *.md                    # Various documentation files
 │   
-├── ⚙️ Configuration
-│   ├── requirements.txt         # Python dependencies
-│   ├── api_keys.yaml           # API configuration (create this)
-│   ├── manage.py               # Django management
-│   └── db.sqlite3              # Local database
+├── 🧪 Quality Assurance
+│   ├── tests/
+│   │   ├── integration/        # Integration test suites
+│   │   ├── unit/              # Unit tests
+│   │   └── fixtures/          # Test data
+│   └── scripts/
+│       ├── validation/         # Validation scripts
+│       ├── demos/             # Demo applications
+│       └── deployment/        # Deployment scripts
+│   
+├── 🐳 Production Deployment
+│   ├── Dockerfile             # Container configuration
+│   ├── docker-compose.yml     # Multi-service orchestration
+│   ├── requirements-production.txt # Production dependencies
+│   └── nginx.conf             # Nginx configuration
+│   
+└── ⚙️ Project Management
+    ├── manage.py              # Django management
+    ├── requirements.txt       # Development dependencies
+    └── launch.json           # VS Code debug configuration
 ```
 
 ### 🔧 **Technology Stack**
