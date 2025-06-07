@@ -92,7 +92,7 @@ def get_commodities(request):
     endpoint = "get_commodities"
     try:
         try:
-            commodities_file_path = os.path.join(os.path.dirname(__file__), '..', 'commodities_by_source.json')
+            commodities_file_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'commodities_by_source.json')
             with open(commodities_file_path, encoding='utf-8') as f:
                 valid_commodities = json.load(f) if commodities_file_path.endswith('.json') else yaml.safe_load(f)
         except FileNotFoundError:
@@ -675,28 +675,73 @@ def get_available_symbols_by_data_source(request):
         api_key = config['API_NINJAS_KEY']
         
     if source == DataSource.FMP.value:
-        base_url = 'https://financialmodelingprep.com/api/v3'
-        endpoint = f'{base_url}/symbol/available-commodities'
+        # Check if API key is properly configured
+        if api_key_fmp and api_key_fmp != "your_fmp_api_key_here":
+            base_url = 'https://financialmodelingprep.com/api/v3'
+            endpoint = f'{base_url}/symbol/available-commodities'
+            
+            try:
+                response = requests.get(
+                    endpoint,
+                    params={'apikey': api_key_fmp},
+                    timeout=30
+                )
+                response.raise_for_status()
+                symbols = response.json()
+                
+                # Cache the results for 24 hours (86400 seconds)
+                cache.set(cache_key, symbols, timeout=86400)
+                
+                return JsonResponse(symbols, safe=False)
+            except requests.exceptions.RequestException as e:
+                logger.error("Error fetching FMP symbols: %s", e)
+                # Fall back to static list on API error
+                pass
         
+        # Fallback to static commodity list when API key not configured or API fails
         try:
-            response = requests.get(
-                endpoint,
-                params={'apikey': api_key_fmp},
-                timeout=30
-            )
-            response.raise_for_status()
-            symbols = response.json()
+            commodities_file_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'commodities_by_source.json')
+            with open(commodities_file_path, encoding='utf-8') as f:
+                commodities_data = json.load(f)
             
-            # Cache the results for 24 hours (86400 seconds)
-            cache.set(cache_key, symbols, timeout=86400)
+            static_symbols = commodities_data.get('fmp', [])
             
-            return JsonResponse(symbols, safe=False)
-        except requests.exceptions.RequestException as e:
-            logger.error("Error fetching FMP symbols: %s", e)
-            return JsonResponse({"error": "Failed to fetch symbols"}, status=500)
+            # Create mapping for human-readable names
+            symbol_names = {
+                'GCUSD': 'Gold',
+                'SIUSD': 'Silver', 
+                'CLUSD': 'Crude Oil',
+                'NGUSD': 'Natural Gas',
+                'PLUSD': 'Platinum',
+                'PAUSD': 'Palladium',
+                'WHUSD': 'Wheat',
+                'CNUSD': 'Corn',
+                'SYUSD': 'Soybeans',
+                'KEUSD': 'Coffee',
+                'CCUSD': 'Cocoa',
+                'CTUSD': 'Cotton',
+                'SBUSD': 'Sugar',
+                'CPUSD': 'Copper',
+                'ALUSD': 'Aluminum',
+                'ZNUSD': 'Zinc',
+                'NIUSD': 'Nickel',
+                'HOUSD': 'Heating Oil',
+                'RBUSD': 'Gasoline'
+            }
+            
+            # Format as expected by frontend with human-readable names
+            formatted_symbols = [{"symbol": s, "name": symbol_names.get(s, s)} for s in static_symbols]
+            
+            # Cache the static results
+            cache.set(cache_key, formatted_symbols, timeout=86400)
+            
+            return JsonResponse(formatted_symbols, safe=False)
+        except FileNotFoundError:
+            logger.error("Commodities configuration file not found")
+            return JsonResponse({"error": "Configuration file not found"}, status=500)
         except json.JSONDecodeError as e:
-            logger.error("Error parsing FMP symbols response: %s", e)
-            return JsonResponse({"error": "Invalid response from API"}, status=500)
+            logger.error("Error parsing commodities configuration: %s", e)
+            return JsonResponse({"error": "Invalid configuration file"}, status=500)
 
     elif source == DataSource.COMMODITYPRICEAPI.value:
         endpoint = 'https://api.commoditypriceapi.com/v2/symbols'
@@ -725,6 +770,22 @@ def get_available_symbols_by_data_source(request):
     elif source == DataSource.API_NINJAS.value:
         data = []
         base_url = 'https://api.api-ninjas.com/v1/commodityprice'
+        
+        # Create mapping for human-readable names for API Ninjas
+        api_ninjas_names = {
+            'gold': 'Gold',
+            'platinum': 'Platinum',
+            'lean_hogs': 'Lean Hogs',
+            'oat': 'Oats',
+            'aluminum': 'Aluminum',
+            'soybean_meal': 'Soybean Meal',
+            'lumber': 'Lumber',
+            'micro_gold': 'Micro Gold',
+            'feeder_cattle': 'Feeder Cattle',
+            'rough_rice': 'Rough Rice',
+            'palladium': 'Palladium'
+        }
+        
         for name in SUPPORTED_NAMES:
             try:
                 response = requests.get(
@@ -735,6 +796,9 @@ def get_available_symbols_by_data_source(request):
                 )
                 if response.status_code == 200:
                     res = response.json()
+                    # Add human-readable name to the response
+                    res['name'] = api_ninjas_names.get(name, name.replace('_', ' ').title())
+                    res['symbol'] = name
                     data.append(res)
                 else:
                     logger.error("Error for %s: %s %s", name, response.status_code, response.text)
@@ -749,8 +813,37 @@ def get_available_symbols_by_data_source(request):
         try:
             client = AlphaVantageAPIClient()
             symbols = client.get_available_commodities()
-            # Format symbols to match other sources
-            formatted_symbols = [{"symbol": s, "name": s} for s in symbols]
+            
+            # Create mapping for human-readable names for Alpha Vantage
+            alpha_vantage_names = {
+                'WTI': 'WTI Crude Oil',
+                'BRENT': 'Brent Crude Oil',
+                'NATURAL_GAS': 'Natural Gas',
+                'HEATING_OIL': 'Heating Oil',
+                'GASOLINE': 'Gasoline',
+                'COPPER': 'Copper',
+                'ALUMINUM': 'Aluminum',
+                'ZINC': 'Zinc',
+                'NICKEL': 'Nickel',
+                'LEAD': 'Lead',
+                'TIN': 'Tin',
+                'GOLD': 'Gold',
+                'SILVER': 'Silver',
+                'PLATINUM': 'Platinum',
+                'PALLADIUM': 'Palladium',
+                'WHEAT': 'Wheat',
+                'CORN': 'Corn',
+                'COTTON': 'Cotton',
+                'SUGAR': 'Sugar',
+                'COFFEE': 'Coffee',
+                'COCOA': 'Cocoa',
+                'RICE': 'Rice',
+                'OATS': 'Oats',
+                'SOYBEANS': 'Soybeans'
+            }
+            
+            # Format symbols to match other sources with human-readable names
+            formatted_symbols = [{"symbol": s, "name": alpha_vantage_names.get(s, s)} for s in symbols]
             cache.set(cache_key, formatted_symbols, timeout=86400)
             return JsonResponse(formatted_symbols, safe=False)
         except requests.exceptions.RequestException as e:

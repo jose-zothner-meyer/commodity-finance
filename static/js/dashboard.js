@@ -224,6 +224,12 @@ async function updateAssetDropdown() {
     // Get assets for selected source
     const assets = await fetchData(API_ENDPOINTS.params, { source: dataSource });
     
+    if (!assets || !Array.isArray(assets)) {
+        console.error('Invalid assets response:', assets);
+        assetSelect.disabled = true;
+        return;
+    }
+    
     // Add new options
     assets.forEach(asset => {
         const option = document.createElement('option');
@@ -245,10 +251,11 @@ async function createAssetChart() {
     const asset = document.getElementById('asset-select').value;
     const dataSource = document.getElementById('data-source').value;
     const timeRange = document.getElementById('commodity-time-range').value;
-    console.log(timeRange);
     const oscillator = document.getElementById('oscillator-select').value;
     
-    if (!asset || !dataSource) return;
+    if (!asset || !dataSource) {
+        return;
+    }
     
     const { start, end } = getTimeRangeDates(timeRange);
     const endpoint = '/api/commodities';

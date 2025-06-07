@@ -92,7 +92,7 @@ def get_commodities(request):
     endpoint = "get_commodities"
     try:
         try:
-            commodities_file_path = os.path.join(os.path.dirname(__file__), '..', 'commodities_by_source.json')
+            commodities_file_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'commodities_by_source.json')
             with open(commodities_file_path, encoding='utf-8') as f:
                 valid_commodities = json.load(f) if commodities_file_path.endswith('.json') else yaml.safe_load(f)
         except FileNotFoundError:
@@ -647,7 +647,7 @@ def get_energy(request):
 @require_http_methods(["GET"])
 def get_commodities_list(request):
     source = request.GET.get('source', 'api_ninjas')
-    json_path = os.path.join(os.path.dirname(__file__), '..', 'commodities_by_source.json')
+    json_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'commodities_by_source.json')
     print(f"DEBUG: commodities_by_source.json path: {json_path}")
     with open(json_path, encoding='utf-8') as f:
         data = json.load(f)
