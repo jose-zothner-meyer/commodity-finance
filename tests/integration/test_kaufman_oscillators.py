@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from energy_finance.oscillators import (
+from apps.core.oscillators import (
     calculate_kaufman_adaptive_moving_average,
     calculate_price_oscillator,
     calculate_momentum_oscillator,

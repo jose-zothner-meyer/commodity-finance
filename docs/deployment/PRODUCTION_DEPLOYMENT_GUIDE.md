@@ -236,7 +236,7 @@ REDIS_URL=redis://127.0.0.1:6379/1
 
 # Django configuration
 DJANGO_SECRET_KEY=your_production_secret_key
-DJANGO_SETTINGS_MODULE=energy_finance.production_settings
+DJANGO_SETTINGS_MODULE=config.settings.production
 
 # API Keys (from your api_keys.yaml)
 FIN_MODELING_PREP_KEY=your_fmp_key
@@ -366,7 +366,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/home/ubuntu/commodity-tracker-1
 Environment=PATH=/home/ubuntu/commodity-tracker-1/venv/bin
-Environment=DJANGO_SETTINGS_MODULE=energy_finance.production_settings
+Environment=DJANGO_SETTINGS_MODULE=config.settings.production
 ExecStart=/home/ubuntu/commodity-tracker-1/venv/bin/gunicorn \
     --workers 3 \
     --bind 127.0.0.1:8000 \
@@ -374,7 +374,7 @@ ExecStart=/home/ubuntu/commodity-tracker-1/venv/bin/gunicorn \
     --max-requests 1000 \
     --max-requests-jitter 100 \
     --preload \
-    energy_finance.wsgi:application
+    config.wsgi:application
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10

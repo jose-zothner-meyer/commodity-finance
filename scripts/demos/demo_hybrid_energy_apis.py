@@ -160,7 +160,7 @@ def test_enhanced_api_endpoint():
         print(f"\n🧪 Testing: {test_case['description']}")
         
         try:
-            response = client.get('/energy_finance/api/energy', {
+            response = client.get('/api/energy/', {
                 'country': 'DE',
                 'data_type': test_case['data_type'],
                 'start': start_date,

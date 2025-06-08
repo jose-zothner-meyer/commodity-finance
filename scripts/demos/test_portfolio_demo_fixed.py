@@ -39,9 +39,6 @@ try:
 except ImportError:
     print("Warning: pandas/numpy not available - using mock data")
     NUMPY_AVAILABLE = False
-    # Create dummy modules to avoid import errors
-    pd = None
-    np = None
 
 
 class PortfolioDemo:
@@ -249,7 +246,7 @@ class PortfolioDemo:
             return
             
         # Create mock data for performance testing
-        if NUMPY_AVAILABLE and np is not None and pd is not None:
+        if NUMPY_AVAILABLE:
             np.random.seed(42)
             dates = pd.date_range('2023-01-01', periods=252, freq='D')
             returns_data = {}
@@ -269,16 +266,8 @@ class PortfolioDemo:
         try:
             if DJANGO_AVAILABLE and returns_df is not None:
                 from apps.core.portfolio import PortfolioAnalyzer
-                analyzer = PortfolioAnalyzer()
-                
-                # Add commodities to analyzer
-                for i, commodity in enumerate(self.sample_portfolio['commodities']):
-                    prices = [float(p) for p in commodity['prices']]
-                    dates = commodity['dates']
-                    weight = weights[i] if i < len(weights) else 0.25
-                    analyzer.add_commodity(commodity['symbol'], prices, dates, weight)
-                
-                _ = analyzer.calculate_portfolio_metrics()
+                analyzer = PortfolioAnalyzer(returns_df, weights)
+                _ = analyzer.calculate_risk_metrics()
                 analysis_time = time.time() - start_time
                 print(f"✅ Analysis completed in {analysis_time:.3f} seconds")
             else:
@@ -286,7 +275,7 @@ class PortfolioDemo:
                 time.sleep(0.1)  # Simulate processing time
                 analysis_time = time.time() - start_time
                 print(f"✅ Mock analysis completed in {analysis_time:.3f} seconds")
-        except (ImportError, ValueError, TypeError) as e:
+        except ImportError as e:
             print(f"❌ Analysis performance test failed: {e}")
         
         # Test simulation performance
@@ -294,18 +283,9 @@ class PortfolioDemo:
         start_time = time.time()
         try:
             if DJANGO_AVAILABLE and returns_df is not None:
-                from apps.core.portfolio import MonteCarloSimulator, PortfolioAnalyzer
-                analyzer = PortfolioAnalyzer()
-                
-                # Add commodities to analyzer
-                for i, commodity in enumerate(self.sample_portfolio['commodities']):
-                    prices = [float(p) for p in commodity['prices']]
-                    dates = commodity['dates']
-                    weight = weights[i] if i < len(weights) else 0.25
-                    analyzer.add_commodity(commodity['symbol'], prices, dates, weight)
-                
-                simulator = MonteCarloSimulator(analyzer)
-                _ = simulator.simulate_portfolio_paths(num_simulations=1000)
+                from apps.core.portfolio import MonteCarloSimulator
+                simulator = MonteCarloSimulator(returns_df, weights)
+                _ = simulator.run_simulation(num_simulations=1000)
                 simulation_time = time.time() - start_time
                 print(f"✅ Simulation (1000 runs) completed in {simulation_time:.3f} seconds")
             else:
@@ -313,7 +293,7 @@ class PortfolioDemo:
                 time.sleep(0.2)  # Simulate processing time
                 simulation_time = time.time() - start_time
                 print(f"✅ Mock simulation completed in {simulation_time:.3f} seconds")
-        except (ImportError, ValueError, TypeError) as e:
+        except ImportError as e:
             print(f"❌ Simulation performance test failed: {e}")
         
         # Test optimization performance
@@ -321,17 +301,8 @@ class PortfolioDemo:
         start_time = time.time()
         try:
             if DJANGO_AVAILABLE and returns_df is not None:
-                from apps.core.portfolio import PortfolioOptimizer, PortfolioAnalyzer
-                analyzer = PortfolioAnalyzer()
-                
-                # Add commodities to analyzer
-                for i, commodity in enumerate(self.sample_portfolio['commodities']):
-                    prices = [float(p) for p in commodity['prices']]
-                    dates = commodity['dates']
-                    weight = weights[i] if i < len(weights) else 0.25
-                    analyzer.add_commodity(commodity['symbol'], prices, dates, weight)
-                
-                optimizer = PortfolioOptimizer(analyzer)
+                from apps.core.portfolio import PortfolioOptimizer
+                optimizer = PortfolioOptimizer(returns_df)
                 _ = optimizer.optimize_portfolio(risk_tolerance='moderate')
                 optimization_time = time.time() - start_time
                 print(f"✅ Optimization completed in {optimization_time:.3f} seconds")
@@ -340,7 +311,7 @@ class PortfolioDemo:
                 time.sleep(0.15)  # Simulate processing time
                 optimization_time = time.time() - start_time
                 print(f"✅ Mock optimization completed in {optimization_time:.3f} seconds")
-        except (ImportError, ValueError, TypeError) as e:
+        except ImportError as e:
             print(f"❌ Optimization performance test failed: {e}")
 
 def main():

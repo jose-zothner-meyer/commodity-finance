@@ -41,7 +41,7 @@ if not settings.configured:
     django.setup()
 
 # Import the Alpha Vantage client after Django setup
-from energy_finance.data_ingest import AlphaVantageAPIClient
+from apps.core.data_ingest import AlphaVantageAPIClient
 
 
 class TestAlphaVantageEnhancements(unittest.TestCase):

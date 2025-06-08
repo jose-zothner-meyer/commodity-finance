@@ -135,7 +135,7 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-        'energy_finance': {
+        'apps': {
             'handlers': ['file', 'error_file'],
             'level': 'INFO',
             'propagate': True,

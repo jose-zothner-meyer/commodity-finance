@@ -13,10 +13,10 @@ project_root = '/Users/jomeme/Documents/AiCore/projects/Commodity_Tracker/commod
 sys.path.insert(0, project_root)
 
 # Configure Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'energy_finance.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
 django.setup()
 
-from energy_finance.data_ingest import PowerPriceAPIClient, EnergyChartsAPIClient
+from apps.core.data_ingest import PowerPriceAPIClient, EnergyChartsAPIClient
 import json
 import time
 
@@ -169,7 +169,7 @@ def test_enhanced_endpoint():
         print(f"\n🧪 Testing {test_case['description']}...")
         
         try:
-            response = client.get('/energy_finance/api/energy', {
+            response = client.get('/api/energy/', {
                 'country': 'DE',
                 'data_type': test_case['data_type'],
                 'start': start_date,

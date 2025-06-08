@@ -6,12 +6,12 @@ This script tests the complete pipeline from API endpoints to data retrieval.
 
 import requests
 import json
-import sys
 from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Union
 
 BASE_URL = "http://127.0.0.1:8000"
 
-def test_api_endpoint(url, description):
+def test_api_endpoint(url: str, description: str) -> tuple[bool, Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]]:
     """Test an API endpoint and return the result."""
     print(f"\n{'='*60}")
     print(f"Testing: {description}")
@@ -39,21 +39,21 @@ def test_api_endpoint(url, description):
         print(f"❌ ERROR: {e}")
         return False, None
 
-def main():
+def main() -> bool:
     """Run comprehensive tests of the commodity tracker system."""
     print("🚀 Starting Commodity Tracker Integration Tests")
     
     # Test 1: Homepage accessibility
-    success, _ = test_api_endpoint(f"{BASE_URL}/", "Dashboard Homepage")
+    home_success, _ = test_api_endpoint(f"{BASE_URL}/", "Dashboard Homepage")
     
     # Test 2: FMP commodity symbols
-    success, fmp_symbols = test_api_endpoint(
+    fmp_success, fmp_symbols = test_api_endpoint(
         f"{BASE_URL}/api/params/?source=fmp", 
         "FMP Commodity Symbols"
     )
     
     # Test 3: Alpha Vantage commodity symbols  
-    success, av_symbols = test_api_endpoint(
+    av_success, av_symbols = test_api_endpoint(
         f"{BASE_URL}/api/params/?source=alpha_vantage", 
         "Alpha Vantage Commodity Symbols"
     )
@@ -62,19 +62,19 @@ def main():
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
     
-    success, gold_data = test_api_endpoint(
+    gold_success, gold_data = test_api_endpoint(
         f"{BASE_URL}/api/commodities/?source=fmp&name=GCUSD&start={start_date}&end={end_date}",
         "Gold Price Data (GCUSD)"
     )
     
     # Test 5: Commodity data retrieval (Silver)
-    success, silver_data = test_api_endpoint(
+    silver_success, silver_data = test_api_endpoint(
         f"{BASE_URL}/api/commodities/?source=fmp&name=SIUSD&start={start_date}&end={end_date}",
         "Silver Price Data (SIUSD)"
     )
     
     # Test 6: Crude Oil data
-    success, oil_data = test_api_endpoint(
+    oil_success, oil_data = test_api_endpoint(
         f"{BASE_URL}/api/commodities/?source=fmp&name=CLUSD&start={start_date}&end={end_date}",
         "Crude Oil Price Data (CLUSD)"
     )
@@ -84,28 +84,47 @@ def main():
     print("📊 TEST SUMMARY")
     print(f"{'='*60}")
     
-    if fmp_symbols:
+    if fmp_symbols and isinstance(fmp_symbols, list):
         print(f"✅ FMP Symbols Available: {len(fmp_symbols)}")
         
-    if av_symbols:
+    if av_symbols and isinstance(av_symbols, list):
         print(f"✅ Alpha Vantage Symbols Available: {len(av_symbols)}")
         
-    if gold_data and 'dates' in gold_data and 'prices' in gold_data:
+    if gold_data and isinstance(gold_data, dict) and 'dates' in gold_data and 'prices' in gold_data:
         print(f"✅ Gold Data Points: {len(gold_data['dates'])}")
-        print(f"   Latest Gold Price: ${gold_data['prices'][0] if gold_data['prices'] else 'N/A'}")
+        prices = gold_data['prices']
+        if prices and len(prices) > 0:
+            print(f"   Latest Gold Price: ${prices[0]}")
+        else:
+            print("   Latest Gold Price: N/A")
         
-    if silver_data and 'dates' in silver_data and 'prices' in silver_data:
+    if silver_data and isinstance(silver_data, dict) and 'dates' in silver_data and 'prices' in silver_data:
         print(f"✅ Silver Data Points: {len(silver_data['dates'])}")
-        print(f"   Latest Silver Price: ${silver_data['prices'][0] if silver_data['prices'] else 'N/A'}")
+        prices = silver_data['prices']
+        if prices and len(prices) > 0:
+            print(f"   Latest Silver Price: ${prices[0]}")
+        else:
+            print("   Latest Silver Price: N/A")
         
-    if oil_data and 'dates' in oil_data and 'prices' in oil_data:
+    if oil_data and isinstance(oil_data, dict) and 'dates' in oil_data and 'prices' in oil_data:
         print(f"✅ Crude Oil Data Points: {len(oil_data['dates'])}")
-        print(f"   Latest Oil Price: ${oil_data['prices'][0] if oil_data['prices'] else 'N/A'}")
+        prices = oil_data['prices']
+        if prices and len(prices) > 0:
+            print(f"   Latest Oil Price: ${prices[0]}")
+        else:
+            print("   Latest Oil Price: N/A")
     
-    print(f"\n🎉 Commodity Tracker System Integration Test Complete!")
+    print("\n🎉 Commodity Tracker System Integration Test Complete!")
     print(f"🌐 Dashboard URL: {BASE_URL}")
     
-    return True
+    # Return overall success status
+    tests_passed = all([
+        home_success,
+        fmp_success or av_success,  # At least one data source should work
+        gold_success or silver_success or oil_success  # At least one commodity should work
+    ])
+    
+    return tests_passed
 
 if __name__ == "__main__":
     main()

@@ -156,7 +156,7 @@ REDIS_URL=redis://127.0.0.1:6379/1
 
 # Django configuration
 DJANGO_SECRET_KEY=$(python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')
-DJANGO_SETTINGS_MODULE=energy_finance.production_settings
+DJANGO_SETTINGS_MODULE=config.settings.production
 
 # Add your API keys here
 FIN_MODELING_PREP_KEY=your_fmp_key_here
@@ -210,7 +210,7 @@ ExecStart=$VENV_DIR/bin/gunicorn \\
     --max-requests 1000 \\
     --max-requests-jitter 100 \\
     --preload \\
-    energy_finance.wsgi:application
+    config.wsgi:application
 ExecReload=/bin/kill -s HUP \$MAINPID
 Restart=always
 RestartSec=10

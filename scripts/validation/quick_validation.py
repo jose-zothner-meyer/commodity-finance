@@ -8,7 +8,6 @@ This script provides a quick verification of all commodity tracker functionality
 import os
 import sys
 import requests
-import json
 from datetime import datetime
 
 # Add the project root to Python path
@@ -24,9 +23,12 @@ try:
     django.setup()
     from django.core.cache import cache
     DJANGO_AVAILABLE = True
-except Exception as e:
+    CACHE_AVAILABLE = True
+except ImportError as e:
     print(f"Warning: Django setup failed: {e}")
     DJANGO_AVAILABLE = False
+    CACHE_AVAILABLE = False
+    cache = None
 
 def main():
     print("="*80)
@@ -46,21 +48,21 @@ def main():
             tests_passed += 1
         else:
             print(f"   ❌ Server returned {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
         print(f"   ❌ Server connection failed: {e}")
     
     # Test 2: Cache Functionality
     print("\n2. Cache Validation...")
-    if DJANGO_AVAILABLE:
+    if DJANGO_AVAILABLE and CACHE_AVAILABLE and cache is not None:
         try:
             cache.set('validation_test', 'working', 30)
-            result = cache.get('validation_test')
-            if result == 'working':
+            cache_result = cache.get('validation_test')
+            if cache_result == 'working':
                 print("   ✅ Cache is operational")
                 tests_passed += 1
             else:
                 print("   ❌ Cache read/write failed")
-        except Exception as e:
+        except (ImportError, AttributeError) as e:
             print(f"   ❌ Cache test failed: {e}")
     else:
         print("   ⚠️  Cache test skipped (Django not available)")
@@ -78,7 +80,7 @@ def main():
                 print("   ❌ Params API returned invalid data")
         else:
             print(f"   ❌ Params API failed with status {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, ValueError) as e:
         print(f"   ❌ Params API error: {e}")
     
     # Test 4: Commodity Data API
@@ -100,7 +102,7 @@ def main():
                 print("   ❌ Commodity data API returned invalid structure")
         else:
             print(f"   ❌ Commodity data API failed with status {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, ValueError) as e:
         print(f"   ❌ Commodity data API error: {e}")
     
     
@@ -117,7 +119,7 @@ def main():
                 print("   ❌ Portfolio sample API returned invalid data")
         else:
             print(f"   ❌ Portfolio sample API failed with status {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, ValueError) as e:
         print(f"   ❌ Portfolio sample API error: {e}")
     
     # Test 6: Portfolio Analysis API (if available)
@@ -127,19 +129,25 @@ def main():
             'commodities': [
                 {
                     'symbol': 'GCUSD', 'name': 'Gold', 'weight': 0.5,
-                    'prices': [1800, 1820, 1810, 1830, 1825, 1815, 1840, 1820, 1835, 1825],
+                    'prices': [1800, 1820, 1810, 1830, 1825, 1815, 1840, 1820, 1835, 1825, 
+                              1850, 1830, 1845, 1860, 1855, 1870, 1850, 1865, 1880, 1875],
                     'dates': ['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04', '2024-01-05', 
-                             '2024-01-06', '2024-01-07', '2024-01-08', '2024-01-09', '2024-01-10']
+                             '2024-01-06', '2024-01-07', '2024-01-08', '2024-01-09', '2024-01-10',
+                             '2024-01-11', '2024-01-12', '2024-01-13', '2024-01-14', '2024-01-15',
+                             '2024-01-16', '2024-01-17', '2024-01-18', '2024-01-19', '2024-01-20']
                 },
                 {
                     'symbol': 'SIUSD', 'name': 'Silver', 'weight': 0.5,
-                    'prices': [25, 26, 24, 27, 26, 25, 28, 26, 27, 25],
+                    'prices': [25, 26, 24, 27, 26, 25, 28, 26, 27, 25,
+                              29, 27, 28, 30, 29, 31, 28, 29, 32, 30],
                     'dates': ['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04', '2024-01-05', 
-                             '2024-01-06', '2024-01-07', '2024-01-08', '2024-01-09', '2024-01-10']
+                             '2024-01-06', '2024-01-07', '2024-01-08', '2024-01-09', '2024-01-10',
+                             '2024-01-11', '2024-01-12', '2024-01-13', '2024-01-14', '2024-01-15',
+                             '2024-01-16', '2024-01-17', '2024-01-18', '2024-01-19', '2024-01-20']
                 }
             ]
         }
-        response = requests.post(f"{base_url}/api/portfolio/analyze", json=test_data, timeout=10)
+        response = requests.post(f"{base_url}/api/portfolio/analyze/", json=test_data, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if 'portfolio_metrics' in data or isinstance(data, dict):
@@ -149,7 +157,7 @@ def main():
                 print("   ❌ Portfolio analysis API returned invalid data")
         else:
             print(f"   ❌ Portfolio analysis API failed with status {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, ValueError) as e:
         print(f"   ❌ Portfolio analysis API error: {e}")
     
     # Test 7: Dashboard Page
@@ -164,7 +172,7 @@ def main():
                 print("   ⚠️  Dashboard page loads but content unclear")
         else:
             print(f"   ❌ Dashboard page failed with status {response.status_code}")
-    except Exception as e:
+    except (requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
         print(f"   ❌ Dashboard page error: {e}")
     
     # Final Summary
@@ -198,11 +206,11 @@ def main():
 
 if __name__ == "__main__":
     try:
-        tests_passed = main()
-        sys.exit(0 if tests_passed >= 5 else 1)
+        result = main()
+        sys.exit(0 if result >= 5 else 1)
     except KeyboardInterrupt:
         print("\n\n⚠️  Validation interrupted by user")
         sys.exit(1)
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError) as e:
         print(f"\n\n❌ Validation failed with error: {e}")
         sys.exit(1)
