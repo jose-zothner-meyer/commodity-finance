@@ -668,7 +668,13 @@ def get_available_symbols_by_data_source(request):
         return JsonResponse(cached_symbols, safe=False)
     
     # If not in cache, fetch from API
-    with open('api_keys.yaml', 'r', encoding='utf-8') as f:
+    import os
+    from django.conf import settings
+    
+    # Build the correct path to the api_keys.yaml file
+    api_keys_path = os.path.join(settings.BASE_DIR, 'data', 'api_keys.yaml')
+    
+    with open(api_keys_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
         api_key_fmp = config['FIN_MODELING_PREP_KEY']
         api_key_cpa = config['COMMODITYPRICEAPI_KEY']

@@ -750,7 +750,7 @@ class EIAAPIClient(APIClient):
             params = {
                 'frequency': 'monthly',
                 'data[0]': 'generation',
-                'facets[stateid][]': state,
+                'facets[location][]': state,
                 'sort[0][column]': 'period',
                 'sort[0][direction]': 'desc',
                 'offset': 0,
@@ -817,7 +817,7 @@ class EIAAPIClient(APIClient):
         }
         
         if region:
-            params['facets[stateid][]'] = region
+            params['facets[location][]'] = region
         
         if start_date:
             params['start'] = start_date

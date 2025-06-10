@@ -1893,25 +1893,36 @@ function calculateUSEnergyStats(data) {
     let values = [];
     
     if (data.values) {
-        values = data.values.filter(v => v != null && !isNaN(v));
+        values = data.values.filter(v => v != null && !isNaN(v)).map(v => parseFloat(v));
     } else if (data.generation_by_source) {
         // Sum all generation sources for total
         const dates = data.dates;
         values = dates.map((_, index) => {
             return Object.values(data.generation_by_source)
-                .reduce((sum, sourceValues) => sum + (sourceValues[index] || 0), 0);
+                .reduce((sum, sourceValues) => {
+                    const val = sourceValues[index];
+                    const numVal = val != null ? parseFloat(val) : 0;
+                    return sum + (isNaN(numVal) ? 0 : numVal);
+                }, 0);
         });
     }
     
     if (values.length === 0) return;
     
     // Calculate statistics
-    const latest = values[values.length - 1];
-    const previous = values[values.length - 2];
-    const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const latest = parseFloat(values[values.length - 1]) || 0;
+    const previous = parseFloat(values[values.length - 2]) || 0;
+    const average = values.reduce((sum, val) => sum + (parseFloat(val) || 0), 0) / values.length;
     
     // Calculate period change
-    const periodChange = previous ? ((latest - previous) / previous * 100) : 0;
+    let periodChange = 0;
+    if (previous && previous !== 0 && !isNaN(previous) && !isNaN(latest)) {
+        periodChange = ((latest - previous) / previous * 100);
+    }
+    // Ensure periodChange is a valid number
+    if (isNaN(periodChange) || !isFinite(periodChange)) {
+        periodChange = 0;
+    }
     
     // Calculate trend (simple linear regression slope)
     const n = values.length;
@@ -1970,12 +1981,18 @@ function getDataUnit(energyType) {
 }
 
 function formatNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
+    // Ensure num is a valid number
+    const numVal = parseFloat(num);
+    if (isNaN(numVal) || !isFinite(numVal)) {
+        return '0.00';
+    }
+    
+    if (numVal >= 1000000) {
+        return (numVal / 1000000).toFixed(1) + 'M';
+    } else if (numVal >= 1000) {
+        return (numVal / 1000).toFixed(1) + 'K';
     } else {
-        return num.toFixed(2);
+        return numVal.toFixed(2);
     }
 }
 
